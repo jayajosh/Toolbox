@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-toolbox}
+      POSTGRES_USER: ${POSTGRES_USER:-toolbox}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-toolbox_dev_only}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PostgreSQL 18 stores its cluster in a versioned subdirectory.
+      - toolbox-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-toolbox} -d ${POSTGRES_DB:-toolbox}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=${POSTGRES_DB:-toolbox};Username=${POSTGRES_USER:-toolbox};Password=${POSTGRES_PASSWORD:-toolbox_dev_only}
+    ports:
+      - "${API_PORT:-5080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "${WEB_PORT:-7001}:80"
+    depends_on:
+      - backend
+
+volumes:
+  toolbox-postgres:

@@ -1,169 +1,301 @@
 # Toolbox
 
-> A self-hosted inventory that tells you exactly where your stuff is.
+> A self-hosted inventory system that tells you exactly where your things are.
 
-Toolbox is a household and workshop inventory application for answering one
-simple question: **where did I put that?** It models real storage spaces as
-nested locations, connects items to those locations, and keeps checkout history
-when something leaves its normal home.
+Toolbox brings structure to household, workshop, and equipment storage. It
+models real spaces as a hierarchy, connects every item to a precise location,
+and records when an item leaves its usual home.
 
-## Status
+Instead of remembering that a torque wrench is "somewhere in the garage",
+Toolbox gives a useful answer:
 
-This repository is at the initial project setup stage. The product direction
-and first vertical slice are specified in [`docs/INITIAL_BUILD.md`](docs/INITIAL_BUILD.md);
-the backend, frontend, database, and Docker Compose application are the next
-implementation targets.
-
-## Planned Features
-
-- Search items by name and description.
-- Organise items in arbitrarily nested locations such as `House / Garage / Tool Chest / Drawer 3`.
-- View an item's complete storage path.
-- Create, move, and manage locations and items.
-- Check items out to a named borrower and return them later.
-- Preserve checkout history rather than deleting completed records.
-- Generate stable QR codes for location pages.
-- Use a responsive interface suitable for a phone in a garage or workshop.
-- Add maps and visual location placement in a later phase.
-
-## Screenshots
-
-Screenshots will be added once the first usable interface is available.
-
-## Quick Start
-
-The application is not runnable yet. Once the initial implementation lands,
-the intended full-stack startup command will be:
-
-```bash
-docker compose up --build
+```text
+House / Garage / Red Tool Chest / Drawer 2
 ```
 
-The Compose stack will provide the ASP.NET Core API, React/Vite frontend, and
-PostgreSQL database. Ports and environment variables will be documented here
-when they are finalized. Copy `.env.example` to `.env` for local configuration;
-never commit secrets.
+The project is designed as a production-minded full-stack application with an
+ASP.NET Core API, a React and TypeScript client, PostgreSQL persistence, and a
+reproducible Docker Compose deployment.
 
-## Development
+> [!IMPORTANT]
+> Toolbox is currently in pre-release development. The product specification
+> and architecture are complete; application scaffolding and the first vertical
+> slice are the next delivery milestone. See [Project status](#project-status)
+> for the current scope.
 
-The planned local toolchain is:
+## Why Toolbox?
 
-- .NET SDK with ASP.NET Core and Entity Framework Core
-- Node.js with npm or pnpm
-- PostgreSQL, supplied by Docker Compose for consistency
-- Docker and Docker Compose
+Generic inventory tools can record what you own, but they rarely model where
+an object is stored with enough precision to help you find it. Toolbox treats
+physical location as a core domain concept rather than a free-text field.
 
-Expected commands after scaffolding:
+- **Find items quickly:** search by name or description and see the complete
+  storage path in each result.
+- **Add ranges quickly:** create numbered sets such as `mm 1/4" sockets 10`
+  through `mm 1/4" sockets 24` in one operation.
+- **Model real spaces:** nest rooms, cabinets, shelves, boxes, and drawers to
+  any depth.
+- **Keep locations accurate:** move items and locations without rebuilding the
+  surrounding hierarchy.
+- **Track borrowed equipment:** check an item out to a named borrower and keep
+  its full return history.
+- **Label physical storage:** generate a stable QR code that opens a location
+  and its contents on a phone.
+- **Own the data:** run the complete system on infrastructure you control.
 
-```bash
-# Start infrastructure and the application
-docker compose up --build
+## Core Workflows
 
-# Backend
-dotnet restore
-dotnet build
-dotnet test
+### Locate an item
 
-# Frontend
-npm install
-npm run build
+Search is the primary interaction. A result combines item details, availability,
+and a calculated path through the location tree so the user can move directly
+from a query to the physical object.
+
+```text
+Torque Wrench
+Available | Consumable: no
+House / Garage / Red Tool Chest / Drawer 2
 ```
+
+### Organise a space
+
+Locations use an arbitrary parent-child hierarchy. The model works equally well
+for a single storage cupboard or a collection spanning a house, garage, loft,
+and workshop. Items can be reassigned as the physical space changes.
+
+### Check equipment out
+
+A checkout records the borrower, time, and optional context. Returning the item
+closes the active checkout rather than deleting it, preserving an auditable
+history while making the item available again.
+
+### Open a labelled location
+
+Every location has a stable URL. Its generated QR code can be attached to a
+box, cabinet, or drawer and scanned to open that location's current contents.
 
 ## Architecture
 
-Toolbox will start as a modular monolith rather than a collection of
-microservices:
+Toolbox uses a modular monolith. This keeps deployment and local development
+simple while preserving explicit boundaries between the API, application
+logic, domain model, and infrastructure.
+
+```mermaid
+flowchart LR
+    Browser[React + TypeScript] -->|REST/JSON| API[ASP.NET Core API]
+    API --> Application[Application Services]
+    Application --> Domain[Domain Model]
+    Application --> Persistence[EF Core]
+    Persistence --> Database[(PostgreSQL)]
+    API --> QR[QR Generation]
+```
+
+The backend owns business rules such as hierarchy validation, path calculation,
+item availability, and checkout state transitions. The frontend is responsible
+for responsive search, browsing, and task-focused item and location workflows.
+
+### Technology
+
+| Area | Technology |
+| --- | --- |
+| API | C# and ASP.NET Core |
+| Domain and persistence | Entity Framework Core |
+| Web client | React, TypeScript, and Vite |
+| Database | PostgreSQL |
+| Backend tests | xUnit |
+| Deployment | Docker and Docker Compose |
+
+### Repository layout
+
+The current foundation follows this structure:
 
 ```text
 toolbox/
-├── backend/       # ASP.NET Core Web API, domain logic, EF Core
-│   ├── src/
-│   └── tests/
-├── frontend/      # React + TypeScript + Vite
-├── docs/           # Product and design documentation
-├── docker-compose.yml
-├── .env.example
-└── README.md
+|-- backend/
+|   |-- src/             # API, application, domain, and persistence
+|   `-- tests/           # Unit and integration tests
+|-- frontend/            # React application
+|-- docs/                # Product and technical documentation
+|-- docker-compose.yml
+|-- .env.example
+`-- README.md
 ```
 
-The backend will own validation, hierarchy/path calculation, checkout rules,
-and persistence. The frontend will consume the REST API and focus on fast
-search, quick item entry, location browsing, and mobile usability.
+## Domain Model
 
-## Data Model
+```mermaid
+erDiagram
+    LOCATION ||--o{ LOCATION : contains
+    LOCATION ||--o{ ITEM : stores
+    ITEM ||--o{ CHECKOUT : has
 
-The initial model has three core concepts:
+    LOCATION {
+        uuid id
+        string name
+        string description
+        uuid parentLocationId
+        string locationType
+    }
 
-- **Location**: a named physical place with an optional parent location. A self-reference supports any depth of nesting.
-- **Item**: an inventory record with a name, description, quantity, and current location.
-- **Checkout**: an append-only history record with borrower, checkout time, optional return time, and notes. At most one active checkout should exist for an item.
+    ITEM {
+        uuid id
+        string name
+        string description
+        uuid locationId
+        boolean isConsumable
+        string consumableStatus
+    }
 
-An item's displayed location is calculated by walking its parents, for
-example: `House / Garage / Red Tool Chest / Drawer 3`.
-
-## API Direction
-
-The first API will expose REST resources for locations and items:
-
-```text
-GET|POST              /api/locations
-GET|PUT|DELETE        /api/locations/{id}
-GET                   /api/locations/tree
-GET|POST              /api/items
-GET|PUT|DELETE        /api/items/{id}
-GET                   /api/items?search=torque
-POST                  /api/items/{id}/checkout
-POST                  /api/items/{id}/return
-GET                   /api/locations/{id}/qr
+    CHECKOUT {
+        uuid id
+        uuid itemId
+        string borrowerName
+        datetime checkedOutAt
+        datetime returnedAt
+        string notes
+    }
 ```
 
-Exact request and response shapes will be documented alongside the API once
-implemented.
+- A **Location** represents a physical space and may contain child locations
+  and items.
+- An **Item** belongs to one current location and exposes its calculated full
+  location path.
+- A **Checkout** is an append-only record. An item may have at most one active
+  checkout, while completed records remain available as history.
 
-## Workflows
+## API Design
 
-### QR locations
+The first release is defined around resource-oriented REST endpoints with
+explicit commands for checkout state transitions.
 
-Each location will have a stable URL such as `/locations/{id}`. Toolbox will
-generate a QR code for that URL so a label on a box, cabinet, or drawer opens
-its contents directly. Printable QR sheets and barcode scanning are outside
-the initial scope.
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/locations` | List locations |
+| `POST` | `/api/locations` | Create a location |
+| `GET` | `/api/locations/tree` | Retrieve the location hierarchy |
+| `GET` | `/api/locations/{id}` | Retrieve a location and its contents |
+| `PUT` | `/api/locations/{id}` | Update or move a location |
+| `DELETE` | `/api/locations/{id}` | Delete a location when valid |
+| `GET` | `/api/items?search={query}` | Search and list items |
+| `POST` | `/api/items` | Create an item |
+| `POST` | `/api/items/quick-add` | Create a numbered range of items |
+| `GET` | `/api/items/{id}` | Retrieve an item and its history |
+| `PUT` | `/api/items/{id}` | Update or move an item |
+| `DELETE` | `/api/items/{id}` | Delete an item |
+| `POST` | `/api/items/{id}/checkout` | Check an item out |
+| `POST` | `/api/items/{id}/return` | Return an item |
+| `GET` | `/api/locations/{id}/qr` | Generate a location QR code |
 
-### Checkout
+Request and response schemas will be versioned and documented alongside the
+implemented API.
 
-Checking out an item records the borrower, timestamp, and optional notes while
-marking the item unavailable. Returning it closes that record and makes the
-item available again. Completed records remain available as history.
+## Project Status
+
+Toolbox is in the repository-foundation phase. Stages 1-3 now include runnable
+ASP.NET Core and React foundations, PostgreSQL persistence configuration, an
+initial EF Core migration, and development seed data. Inventory workflows are
+the next milestone.
+
+The first release will be considered complete when it provides:
+
+- a responsive dashboard and item search;
+- nested location creation and browsing;
+- item creation, movement, and full-path calculation;
+- checkout, return, and retained checkout history;
+- stable location pages and QR generation;
+- PostgreSQL migrations and representative demo data;
+- automated domain and integration tests; and
+- one-command startup through Docker Compose.
+
+The detailed implementation brief is available in
+[`docs/INITIAL_BUILD.md`](docs/INITIAL_BUILD.md).
+
+## Running Toolbox
+
+The stack can be started with:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The frontend is available at `http://192.168.10.116:7001/`, the API at
+`http://192.168.10.116:5080`, and PostgreSQL at `192.168.10.116:5432`. In Development,
+the API applies migrations and inserts demo data when the database is empty.
+The current frontend includes inventory search, nested locations, item creation,
+quick-add ranges, tags, and families.
+
+For local development without Compose:
+
+```bash
+dotnet restore backend/Toolbox.sln
+dotnet build backend/Toolbox.sln
+dotnet test backend/Toolbox.sln
+npm --prefix frontend install
+npm --prefix frontend run lint
+npm --prefix frontend run test
+npm --prefix frontend run build
+```
+
+The backend exposes `GET /api/health/live`, `GET /api/health/ready`, and
+`GET /api/status`. See [`backend/README.md`](backend/README.md) for migration
+commands and connection-string configuration.
+
+Toolbox local Vite development uses `http://192.168.10.116:5174/` and preview
+uses port `4174`. Port `5173` is reserved for the separate portfolio
+application. These local ports can be changed in `frontend/.env` using
+`VITE_DEV_PORT` and `VITE_PREVIEW_PORT`.
+
+The Docker host ports can be changed in the root `.env` using `WEB_PORT`,
+`API_PORT`, and `POSTGRES_PORT`. The container-internal ports are fixed for
+service-to-service communication.
+
+## Engineering Priorities
+
+- **Domain integrity:** prevent location cycles, invalid item moves, and
+  duplicate active checkouts at the backend boundary.
+- **Useful tests:** cover hierarchy traversal, path calculation, search, item
+  movement, and the complete checkout lifecycle.
+- **Operational simplicity:** provide migrations, health checks, environment
+  templates, and a single Compose-based deployment path.
+- **Mobile usability:** optimise common interactions for QR-led use in garages,
+  workshops, and storage areas.
+- **Focused scope:** prove the inventory workflow before introducing maps,
+  accounts, or automation features.
 
 ## Roadmap
 
-1. Scaffold the API, React client, PostgreSQL connection, migrations, and Compose stack.
-2. Implement nested locations, item assignment, path calculation, and search.
-3. Add checkout/return actions, history, seed data, and automated tests.
-4. Add location pages and QR generation.
-5. Document and implement the map model and visual layout editor.
-6. Consider authentication, attachments, barcode support, and other extensions.
+| Milestone | Outcome |
+| --- | --- |
+| Foundation | API and client scaffolding, PostgreSQL, migrations, and Compose |
+| Inventory | Nested locations, item management, full paths, and search |
+| Circulation | Checkout and return commands with retained history |
+| Physical access | Stable location pages and generated QR codes |
+| Spatial view | Portable maps and visual location placement |
+| Extensions | Authentication, attachments, barcode support, and offline options |
 
-The initial release deliberately does not include full accounts, complex
-permissions, OCR, AI recognition, purchasing, warranty tracking, offline sync,
-or a native mobile app.
+The map system is intentionally separated from the location hierarchy. Planned
+map placements use normalised coordinates so layouts remain portable across
+screen sizes without coupling inventory data to a particular rendering engine.
 
-## Future Map System
+## Scope
 
-Maps are planned as a separate layer over the location hierarchy. The proposed
-concepts are `Map`, `MapElement`, and `LocationMapPlacement`, with normalized
-`x`, `y`, `width`, `height`, and `rotation` values so layouts remain portable
-across screen sizes. The map editor will not be built until the core inventory
-workflow is useful on its own.
+The initial release deliberately excludes complex permissions, OCR, AI image
+recognition, purchasing and warranty management, offline synchronisation, and a
+native mobile application. These features would add operational complexity
+before the core find, organise, and checkout workflows have been validated.
 
 ## Contributing
 
-Read [`AGENTS.md`](AGENTS.md) and [`docs/INITIAL_BUILD.md`](docs/INITIAL_BUILD.md)
-before making changes. Keep the modular-monolith boundary clear, add tests for
-domain behavior, run builds/tests before submitting changes, and keep commits
-small and descriptive. Do not commit generated output, credentials, or local
-environment files.
+Before contributing, read the [`project guidance`](docs/AGENTS.md) and the
+[`initial build specification`](docs/INITIAL_BUILD.md). Keep domain behaviour
+outside controllers and UI components, include tests for business rules, and
+run the relevant builds and test suites before submitting a change.
+
+Use small, descriptive commits. Never commit generated output, credentials, or
+local environment files.
 
 ## License
 
-No license has been selected yet. Until one is added, all rights are reserved.
+No open-source license has been selected. Until a license is added, all rights
+are reserved.
