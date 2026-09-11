@@ -11,6 +11,7 @@ public sealed class ToolboxDbContext(DbContextOptions<ToolboxDbContext> options)
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<ItemFamily> Families => Set<ItemFamily>();
     public DbSet<ItemTag> ItemTags => Set<ItemTag>();
+    public DbSet<SpacePlan> SpacePlans => Set<SpacePlan>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

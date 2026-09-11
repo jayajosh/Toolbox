@@ -3,7 +3,7 @@
 > A self-hosted inventory system that tells you exactly where your things are.
 
 Toolbox brings structure to household, workshop, and equipment storage. It
-models real spaces as a hierarchy, connects every item to a precise location,
+models real spaces as a hierarchy, connects every item to a storage container,
 and records when an item leaves its usual home.
 
 Instead of remembering that a torque wrench is "somewhere in the garage",
@@ -18,16 +18,16 @@ ASP.NET Core API, a React and TypeScript client, PostgreSQL persistence, and a
 reproducible Docker Compose deployment.
 
 > [!IMPORTANT]
-> Toolbox is currently in pre-release development. The product specification
-> and architecture are complete; application scaffolding and the first vertical
-> slice are the next delivery milestone. See [Project status](#project-status)
-> for the current scope.
+> Toolbox is currently in V1 pre-release testing. Its core inventory, storage,
+> checkout, and spatial-planning workflows are implemented and run through
+> Docker Compose. See [Project status](#project-status) for the remaining V1
+> release work and known limitations.
 
 ## Why Toolbox?
 
 Generic inventory tools can record what you own, but they rarely model where
 an object is stored with enough precision to help you find it. Toolbox treats
-physical location as a core domain concept rather than a free-text field.
+storage as a core domain concept rather than a free-text field.
 
 - **Find items quickly:** search by name or description and see the complete
   storage path in each result.
@@ -35,12 +35,10 @@ physical location as a core domain concept rather than a free-text field.
   through `mm 1/4" sockets 24` in one operation.
 - **Model real spaces:** nest rooms, cabinets, shelves, boxes, and drawers to
   any depth.
-- **Keep locations accurate:** move items and locations without rebuilding the
+- **Keep storage accurate:** move items and storage containers without rebuilding the
   surrounding hierarchy.
 - **Track borrowed equipment:** check an item out to a named borrower and keep
   its full return history.
-- **Label physical storage:** generate a stable QR code that opens a location
-  and its contents on a phone.
 - **Own the data:** run the complete system on infrastructure you control.
 
 ## Core Workflows
@@ -48,7 +46,7 @@ physical location as a core domain concept rather than a free-text field.
 ### Locate an item
 
 Search is the primary interaction. A result combines item details, availability,
-and a calculated path through the location tree so the user can move directly
+and a calculated path through the storage hierarchy so the user can move directly
 from a query to the physical object.
 
 ```text
@@ -59,7 +57,7 @@ House / Garage / Red Tool Chest / Drawer 2
 
 ### Organise a space
 
-Locations use an arbitrary parent-child hierarchy. The model works equally well
+Storage containers use an arbitrary parent-child hierarchy. The model works equally well
 for a single storage cupboard or a collection spanning a house, garage, loft,
 and workshop. Items can be reassigned as the physical space changes.
 
@@ -69,10 +67,10 @@ A checkout records the borrower, time, and optional context. Returning the item
 closes the active checkout rather than deleting it, preserving an auditable
 history while making the item available again.
 
-### Open a labelled location
+### Open a labelled storage container
 
-Every location has a stable URL. Its generated QR code can be attached to a
-box, cabinet, or drawer and scanned to open that location's current contents.
+Storage container QR labels are planned for V2. V1 focuses on the inventory, storage,
+search, movement, and checkout workflows.
 
 ## Architecture
 
@@ -87,12 +85,11 @@ flowchart LR
     Application --> Domain[Domain Model]
     Application --> Persistence[EF Core]
     Persistence --> Database[(PostgreSQL)]
-    API --> QR[QR Generation]
 ```
 
 The backend owns business rules such as hierarchy validation, path calculation,
 item availability, and checkout state transitions. The frontend is responsible
-for responsive search, browsing, and task-focused item and location workflows.
+for responsive search, browsing, and task-focused item and storage workflows.
 
 ### Technology
 
@@ -122,6 +119,12 @@ toolbox/
 ```
 
 ## Domain Model
+
+The UI uses **Storage** for navigation and sections, **storage container** for
+individual entities, and **Container** in compact controls. Rooms, buildings,
+and nested shelves or drawers are all storage containers. The designer uses a
+**Storage library**. Internal `Location` types, API routes, database fields, and
+browser storage contracts retain their existing names; no data migration is needed.
 
 ```mermaid
 erDiagram
@@ -156,10 +159,10 @@ erDiagram
     }
 ```
 
-- A **Location** represents a physical space and may contain child locations
+- A **storage container** (`Location` in code) represents a physical space and may contain child containers
   and items.
-- An **Item** belongs to one current location and exposes its calculated full
-  location path.
+- An **Item** belongs to one current storage container and exposes its calculated full
+  storage path.
 - A **Checkout** is an append-only record. An item may have at most one active
   checkout, while completed records remain available as history.
 
@@ -170,12 +173,12 @@ explicit commands for checkout state transitions.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/locations` | List locations |
-| `POST` | `/api/locations` | Create a location |
-| `GET` | `/api/locations/tree` | Retrieve the location hierarchy |
-| `GET` | `/api/locations/{id}` | Retrieve a location and its contents |
-| `PUT` | `/api/locations/{id}` | Update or move a location |
-| `DELETE` | `/api/locations/{id}` | Delete a location when valid |
+| `GET` | `/api/locations` | List storage containers |
+| `POST` | `/api/locations` | Create a storage container |
+| `GET` | `/api/locations/tree` | Retrieve the storage hierarchy |
+| `GET` | `/api/locations/{id}` | Retrieve a storage container and its contents |
+| `PUT` | `/api/locations/{id}` | Update or move a storage container |
+| `DELETE` | `/api/locations/{id}` | Delete a storage container when valid |
 | `GET` | `/api/items?search={query}` | Search and list items |
 | `POST` | `/api/items` | Create an item |
 | `POST` | `/api/items/quick-add` | Create a numbered range of items |
@@ -183,29 +186,61 @@ explicit commands for checkout state transitions.
 | `PUT` | `/api/items/{id}` | Update or move an item |
 | `DELETE` | `/api/items/{id}` | Delete an item |
 | `POST` | `/api/items/{id}/checkout` | Check an item out |
-| `POST` | `/api/items/{id}/return` | Return an item |
-| `GET` | `/api/locations/{id}/qr` | Generate a location QR code |
+| `POST` | `/api/items/{id}/checkin` | Return an item |
 
 Request and response schemas will be versioned and documented alongside the
 implemented API.
 
 ## Project Status
 
-Toolbox is in the repository-foundation phase. Stages 1-3 now include runnable
-ASP.NET Core and React foundations, PostgreSQL persistence configuration, an
-initial EF Core migration, and development seed data. Inventory workflows are
-the next milestone.
+Toolbox has a working V1 vertical slice backed by ASP.NET Core, PostgreSQL, and
+a responsive React client. The core V1 workflows are implemented:
 
-The first release will be considered complete when it provides:
+- search and filter inventory by item name, container hierarchy, family, and tag;
+- create individual items or numbered ranges;
+- organise items with families, tags, and arbitrarily nested storage containers;
+- move or update items while retaining their calculated full storage path;
+- create, rename, move, colour, and recursively remove storage containers;
+- check out one or many items to a named borrower with optional notes;
+- review and filter currently available and checked-out items in a dedicated checkout page;
+- check items back in while preserving checkout history;
+- draw a simple floor plan and place storage containers on it; and
+- run the frontend, API, and PostgreSQL together through Docker Compose.
 
-- a responsive dashboard and item search;
-- nested location creation and browsing;
-- item creation, movement, and full-path calculation;
-- checkout, return, and retained checkout history;
-- stable location pages and QR generation;
-- PostgreSQL migrations and representative demo data;
-- automated domain and integration tests; and
-- one-command startup through Docker Compose.
+The backend has migrations and automated domain coverage for hierarchy, search,
+movement, deletion, and checkout rules. The frontend covers the primary
+inventory, storage, and designer interactions. Before declaring V1 complete,
+the project still needs continuous integration and final release verification.
+
+### Space designer
+
+The browser-based space designer supports walls, rectangles, doors, garage
+doors, and windows. Plans include configurable units, scale, grid size, canvas
+dimensions, snapping, zoom, undo/redo, and JSON export. Storage containers can
+be placed from the Storage library, and inventory maps highlight an item's
+mapped container or its nearest mapped parent.
+
+The current plan is saved in browser local storage. It is not yet persisted to
+PostgreSQL or shared between browsers and devices.
+
+### Checkout workspace
+
+The checkout page separates items that are ready to borrow from items away from
+the toolbox. It supports search, multi-select checkout and check-in, direct
+single-item checkout dialogs, borrower assignment, optional notes, and an
+assignee column for checked-out items. Item pages also expose the active
+borrower and retained checkout history.
+
+### Known limitations
+
+- There is no account, authentication, or permissions system.
+- Space-designer plans are local to one browser and only export as JSON.
+- Dedicated storage-container detail URLs are deferred; V1 uses hierarchical
+  Container filters on the Inventory and checkout pages instead.
+- Automated checks run locally, but a GitHub Actions CI workflow is not yet present.
+- Item photos and general attachments are not implemented.
+- QR storage-container labels are intentionally deferred to V2.
+- The checkout model records a borrower name rather than assigning a user account.
 
 The detailed implementation brief is available in
 [`docs/INITIAL_BUILD.md`](docs/INITIAL_BUILD.md).
@@ -222,8 +257,9 @@ docker compose up --build
 The frontend is available at `http://192.168.10.116:7001/`, the API at
 `http://192.168.10.116:5080`, and PostgreSQL at `192.168.10.116:5432`. In Development,
 the API applies migrations and inserts demo data when the database is empty.
-The current frontend includes inventory search, nested locations, item creation,
-quick-add ranges, tags, and families.
+The frontend includes inventory search, nested storage, item creation and bulk
+actions, quick-add ranges, tags, families, checkout/check-in, retained history,
+and the local space designer.
 
 For local development without Compose:
 
@@ -252,31 +288,31 @@ service-to-service communication.
 
 ## Engineering Priorities
 
-- **Domain integrity:** prevent location cycles, invalid item moves, and
+- **Domain integrity:** prevent storage hierarchy cycles, invalid item moves, and
   duplicate active checkouts at the backend boundary.
 - **Useful tests:** cover hierarchy traversal, path calculation, search, item
   movement, and the complete checkout lifecycle.
 - **Operational simplicity:** provide migrations, health checks, environment
   templates, and a single Compose-based deployment path.
-- **Mobile usability:** optimise common interactions for QR-led use in garages,
+- **Mobile usability:** optimise common interactions for phone use in garages,
   workshops, and storage areas.
-- **Focused scope:** prove the inventory workflow before introducing maps,
-  accounts, or automation features.
+- **Focused scope:** complete and harden the core inventory, checkout, and
+  lightweight spatial workflows before introducing accounts or automation.
 
 ## Roadmap
 
 | Milestone | Outcome |
 | --- | --- |
 | Foundation | API and client scaffolding, PostgreSQL, migrations, and Compose |
-| Inventory | Nested locations, item management, full paths, and search |
+| Inventory | Nested storage containers, item management, full paths, and search |
 | Circulation | Checkout and return commands with retained history |
-| Physical access | Stable location pages and generated QR codes |
-| Spatial view | Portable maps and visual location placement |
+| Physical access | QR storage container labels and scan-led access in V2 |
+| Spatial view | Local floor plans and visual storage container placement |
 | Extensions | Authentication, attachments, barcode support, and offline options |
 
-The map system is intentionally separated from the location hierarchy. Planned
-map placements use normalised coordinates so layouts remain portable across
-screen sizes without coupling inventory data to a particular rendering engine.
+The map system is intentionally separated from the storage hierarchy. Its
+placements use plan coordinates so layouts render across screen sizes without
+coupling inventory records to a particular viewport.
 
 ## Scope
 

@@ -44,6 +44,7 @@ export type Checkout = {
   returnedAt: string | null
   borrowerName: string
   notes: string | null
+  returnedNotes: string | null
 }
 
 export type ConsumableStatus = 'low' | 'out'

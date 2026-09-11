@@ -30,6 +30,7 @@ public sealed class Checkout
     public DateTime? ReturnedAt { get; private set; }
     public string BorrowerName { get; private set; }
     public string? Notes { get; private set; }
+    public string? ReturnedNotes { get; private set; }
 
     public Item Item { get; private set; } = null!;
     public bool IsActive => ReturnedAt is null;
@@ -49,7 +50,7 @@ public sealed class Checkout
             notes);
     }
 
-    public void Return(DateTime? returnedAt = null)
+    public void Return(string? returnedNotes = null, DateTime? returnedAt = null)
     {
         if (!IsActive)
         {
@@ -63,5 +64,8 @@ public sealed class Checkout
         }
 
         ReturnedAt = timestamp;
+        ReturnedNotes = Guard.Optional(returnedNotes, nameof(returnedNotes), NotesMaxLength);
     }
+
+    public void Return(DateTime returnedAt) => Return(null, returnedAt);
 }

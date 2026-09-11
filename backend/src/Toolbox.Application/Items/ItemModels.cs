@@ -2,6 +2,12 @@ using Toolbox.Domain.Entities;
 
 namespace Toolbox.Application.Items;
 
+public sealed class ItemFeatureOptions
+{
+    public bool Checkout { get; set; } = true;
+    public bool CheckoutHistory { get; set; } = true;
+}
+
 public sealed record CreateItemCommand(
     string Name,
     Guid LocationId,
@@ -29,6 +35,7 @@ public sealed record UpdateItemCommand(
     ConsumableStatus? ConsumableStatus = null);
 
 public sealed record CheckoutItemCommand(string BorrowerName, string? Notes = null);
+public sealed record CheckinItemCommand(string? Notes = null);
 
 public sealed record FamilyReference(Guid Id, string Name, Guid? ParentFamilyId);
 
@@ -66,7 +73,8 @@ public sealed record CheckoutSummary(
     DateTime CheckedOutAt,
     DateTime? ReturnedAt,
     string BorrowerName,
-    string? Notes);
+    string? Notes,
+    string? ReturnedNotes);
 
 public sealed class ItemNotFoundException(Guid id)
     : Exception($"Item '{id}' was not found.");

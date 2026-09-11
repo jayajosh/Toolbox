@@ -24,9 +24,9 @@ export function LocationSelect({ locations, value, onChange }: LocationSelectPro
   const byId = new Map(locations.map((location) => [location.id, location]))
   return (
     <label className="field">
-      <span>Storage location</span>
+      <span>Storage container</span>
       <select value={value} onChange={(event) => onChange(event.target.value)} required>
-        <option value="">Choose a location</option>
+        <option value="">Choose a container</option>
         {locations
           .slice()
           .sort((a, b) => pathFor(a, byId).localeCompare(pathFor(b, byId)))

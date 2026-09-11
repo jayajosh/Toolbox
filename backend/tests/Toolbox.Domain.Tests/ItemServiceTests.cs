@@ -108,6 +108,24 @@ public sealed class ItemServiceTests
         await Assert.ThrowsAsync<ItemConflictException>(() => service.DeleteAsync(item.Id, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task CheckinRetainsSeparateReturnNotes()
+    {
+        var locations = new FakeLocationRepository();
+        var location = locations.Add(Location.Create("Garage"));
+        var repository = new FakeItemRepository();
+        var service = new ItemService(repository, locations);
+        var item = await service.CreateAsync(new CreateItemCommand("Multimeter", location.Id), CancellationToken.None);
+        repository.Items.Single().Checkouts.Add(Checkout.Create(item.Id, "Sam", "Borrowed for a repair"));
+
+        var result = await service.CheckinAsync(item.Id, new CheckinItemCommand("Returned clean"), CancellationToken.None);
+
+        var checkout = Assert.Single(result.CheckoutHistory);
+        Assert.NotNull(checkout.ReturnedAt);
+        Assert.Equal("Borrowed for a repair", checkout.Notes);
+        Assert.Equal("Returned clean", checkout.ReturnedNotes);
+    }
+
     private sealed class FakeLocationRepository : ILocationRepository
     {
         public List<Location> Locations { get; } = [];

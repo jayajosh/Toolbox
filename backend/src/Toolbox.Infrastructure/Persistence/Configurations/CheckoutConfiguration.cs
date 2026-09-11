@@ -23,6 +23,7 @@ internal sealed class CheckoutConfiguration : IEntityTypeConfiguration<Checkout>
             .HasMaxLength(Checkout.BorrowerNameMaxLength)
             .IsRequired();
         builder.Property(checkout => checkout.Notes).HasMaxLength(Checkout.NotesMaxLength);
+        builder.Property(checkout => checkout.ReturnedNotes).HasMaxLength(Checkout.NotesMaxLength);
 
         builder.HasOne(checkout => checkout.Item)
             .WithMany(item => item.Checkouts)

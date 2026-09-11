@@ -1,5 +1,8 @@
 import type { FamilySummary, Item, ItemDetails, ItemInput, Location, LocationInput, QuickAddInput, Tag } from './types'
 
+export type ItemFeatures = { checkout: boolean; checkoutHistory: boolean }
+export type SpacePlan = { elements: unknown; measurementSettings: unknown; updatedAt: string }
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...options,
@@ -72,6 +75,10 @@ export function getItem(id: string, signal?: AbortSignal) {
   return request<ItemDetails>(`/api/items/${id}`, { signal })
 }
 
+export function getItemFeatures(signal?: AbortSignal) {
+  return request<ItemFeatures>('/api/items/features', { signal })
+}
+
 export function createItem(input: ItemInput) {
   return request<ItemDetails>('/api/items', { method: 'POST', body: JSON.stringify(input) })
 }
@@ -88,10 +95,21 @@ export function deleteItem(id: string) {
   return request<void>(`/api/items/${id}`, { method: 'DELETE' })
 }
 
+export function getSpacePlan(signal?: AbortSignal) {
+  return request<SpacePlan>('/api/space-plan', { signal })
+}
+
+export function saveSpacePlan(elements: unknown[], measurementSettings: unknown) {
+  return request<SpacePlan>('/api/space-plan', {
+    method: 'PUT',
+    body: JSON.stringify({ elements, measurementSettings }),
+  })
+}
+
 export function checkoutItem(id: string, borrowerName: string, notes: string) {
   return request<ItemDetails>(`/api/items/${id}/checkout`, { method: 'POST', body: JSON.stringify({ borrowerName, notes: notes || null }) })
 }
 
-export function checkinItem(id: string) {
-  return request<ItemDetails>(`/api/items/${id}/checkin`, { method: 'POST' })
+export function checkinItem(id: string, notes = '') {
+  return request<ItemDetails>(`/api/items/${id}/checkin`, { method: 'POST', body: JSON.stringify({ notes: notes || null }) })
 }

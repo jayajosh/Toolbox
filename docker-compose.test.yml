@@ -1,0 +1,5 @@
+services:
+  backend:
+    environment:
+      Features__Checkout: "true"
+      Features__CheckoutHistory: "true"

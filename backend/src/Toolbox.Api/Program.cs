@@ -15,6 +15,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 builder.Services.AddScoped<LocationService>();
 builder.Services.AddScoped<ItemService>();
+builder.Services.AddSingleton(builder.Configuration.GetSection("Features").Get<ItemFeatureOptions>() ?? new ItemFeatureOptions());
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<FamilyService>();
 builder.Services.AddToolboxInfrastructure(builder.Configuration);

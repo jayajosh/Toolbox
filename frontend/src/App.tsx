@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Brand } from './components/Brand'
+import { CheckoutPage } from './pages/CheckoutPage'
 import { InventoryPage } from './pages/InventoryPage'
 import { ItemPage } from './pages/ItemPage'
 import { LocationsPage } from './pages/LocationsPage'
 import { SpaceDesignerPage } from './pages/SpaceDesignerPage'
 
-type Route = { page: 'inventory' | 'item' | 'locations' | 'designer'; id?: string }
+type Route = { page: 'inventory' | 'item' | 'locations' | 'designer' | 'checkout'; id?: string }
 type Theme = 'day' | 'night'
 const THEME_KEY = 'toolbox-theme'
 
@@ -15,10 +16,15 @@ function initialTheme(): Theme {
 
 function routeFromLocation(): Route {
   const parts = window.location.pathname.split('/').filter(Boolean)
+  if (parts[0] === 'checkout') return { page: 'checkout' }
   if (parts[0] === 'locations') return { page: 'locations' }
   if (parts[0] === 'designer') return { page: 'designer' }
   if (parts[0] === 'items' && parts[1]) return { page: 'item', id: parts[1] === 'new' ? undefined : parts[1] }
   return { page: 'inventory' }
+}
+
+function ThemeSwitch({ theme, className, onToggle }: { theme: Theme; className: string; onToggle: () => void }) {
+  return <button className={`theme-switch ${className}`} type="button" onClick={onToggle} aria-label={`Switch to ${theme === 'day' ? 'night' : 'day'} mode`}><span className="theme-switch-label">{theme === 'day' ? 'Day' : 'Night'}</span><span className="theme-switch-track"><span className="theme-switch-thumb" /></span></button>
 }
 
 export default function App() {
@@ -41,21 +47,28 @@ export default function App() {
     setRoute(routeFromLocation())
   }
 
+  function toggleTheme() {
+    setTheme((current) => current === 'day' ? 'night' : 'day')
+  }
+
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <header className="app-header">
         <Brand onNavigate={navigate} />
         <nav className="main-nav" aria-label="Main navigation">
-          <button className={route.page === 'inventory' ? 'nav-link is-active' : 'nav-link'} type="button" onClick={() => navigate('/')}>Inventory</button>
-          <button className={route.page === 'locations' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/locations')}><span className="nav-dot" /> Locations</button>
-          <button className={route.page === 'designer' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/designer')}>Space designer</button>
-        </nav>
-         <button className="theme-switch" type="button" onClick={() => setTheme((current) => current === 'day' ? 'night' : 'day')} aria-label={`Switch to ${theme === 'day' ? 'night' : 'day'} mode`}><span className="theme-switch-track"><span className="theme-switch-thumb" /></span><span>{theme === 'day' ? 'Day' : 'Night'}</span></button>
+           <button className={route.page === 'inventory' ? 'nav-link is-active' : 'nav-link'} type="button" onClick={() => navigate('/')}>Inventory</button>
+           <button className={route.page === 'locations' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/locations')}>Storage</button>
+           <button className={route.page === 'designer' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/designer')}>Space designer</button>
+           <button className={route.page === 'checkout' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/checkout')}>Check out</button>
+         </nav>
+         <ThemeSwitch theme={theme} className="theme-switch--desktop" onToggle={toggleTheme} />
       </header>
+      <div className="mobile-theme-row"><ThemeSwitch theme={theme} className="theme-switch--mobile" onToggle={toggleTheme} /></div>
       {route.page === 'inventory' && <InventoryPage onNavigate={navigate} />}
+      {route.page === 'checkout' && <CheckoutPage onNavigate={navigate} />}
       {route.page === 'item' && <ItemPage id={route.id} onNavigate={navigate} />}
       {route.page === 'locations' && <LocationsPage onNavigate={navigate} />}
-      {route.page === 'designer' && <SpaceDesignerPage onNavigate={navigate} />}
+       {route.page === 'designer' && <SpaceDesignerPage />}
       <footer className="app-footer"><span>Toolbox / A clearer place for everything.</span><span>Foundation build</span></footer>
     </div>
   )

@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { checkinItem, checkoutItem, createFamily, createItem, createTag, deleteTag, getItem, listFamilies, listLocations, listTags, quickAddItems, updateItem } from '../api'
+import './ItemPage.css'
+import { checkinItem, checkoutItem, createFamily, createItem, createTag, deleteTag, getItem, getItemFeatures, listFamilies, listLocations, listTags, quickAddItems, updateItem } from '../api'
 import { FamilyPicker } from '../components/FamilyPicker'
 import { LocationSelect } from '../components/LocationSelect'
 import { MapPanel } from '../components/MapPanel'
@@ -27,6 +28,10 @@ export function ItemPage({ id, onNavigate }: ItemPageProps) {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [borrowerName, setBorrowerName] = useState('')
   const [checkoutNotes, setCheckoutNotes] = useState('')
+  const [checkinOpen, setCheckinOpen] = useState(false)
+  const [checkinNotes, setCheckinNotes] = useState('')
+  const [features, setFeatures] = useState({ checkout: true, checkoutHistory: true })
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const startNumber = Number(quickStart)
   const endNumber = Number(quickEnd)
@@ -45,12 +50,14 @@ export function ItemPage({ id, onNavigate }: ItemPageProps) {
       listLocations(controller.signal),
       listTags('', controller.signal),
       listFamilies(controller.signal),
+      getItemFeatures(controller.signal),
       id ? getItem(id, controller.signal) : Promise.resolve(null),
     ])
-      .then(([nextLocations, nextTags, nextFamilies, nextItem]) => {
+      .then(([nextLocations, nextTags, nextFamilies, nextFeatures, nextItem]) => {
         setLocations(nextLocations)
         setTags(nextTags)
         setFamilies(nextFamilies)
+        setFeatures(nextFeatures)
         if (nextItem) {
           setItem(nextItem)
           setForm({
@@ -123,7 +130,7 @@ export function ItemPage({ id, onNavigate }: ItemPageProps) {
 
   async function checkIn() {
     if (!item) return
-    try { setSaving(true); setItem(await checkinItem(item.id)) }
+      try { setSaving(true); setItem(await checkinItem(item.id, checkinNotes)); setCheckinOpen(false); setCheckinNotes('') }
     catch (reason: unknown) { setError(reason instanceof Error ? reason.message : 'Could not check in this item.') }
     finally { setSaving(false) }
   }
@@ -175,15 +182,15 @@ export function ItemPage({ id, onNavigate }: ItemPageProps) {
           </div>
          </form>
          <aside className="record-aside">
-           {item && <div className={`checkout-card${item.isCheckedOut ? ' checkout-card--out' : ''}`}>
+             {item && features.checkout && <div className={`checkout-card${item.isCheckedOut ? ' checkout-card--out' : ''}`}>
              <p className="kicker">Item availability</p>
              <div className="checkout-card-status"><span />{item.isCheckedOut ? 'Currently checked out' : 'Currently here'}</div>
              {item.isCheckedOut && item.activeCheckout && <p className="checkout-card-detail">With {item.activeCheckout.borrowerName}</p>}
              {item.isCheckedOut
-               ? <button className="primary-button" type="button" onClick={() => void checkIn()} disabled={saving}>Check in</button>
+                ? <button className="primary-button" type="button" onClick={() => setCheckinOpen(true)} disabled={saving}>Check in</button>
                : <button className="primary-button" type="button" onClick={() => setCheckoutOpen(true)}>Check out</button>}
            </div>}
-           {item && <div className="history-card"><p className="kicker">Record activity</p><strong>{item.checkoutHistory.length}</strong><span>checkout records</span></div>}
+             {item && features.checkoutHistory && <div className="history-card"><p className="kicker">Record activity</p><div className="history-count"><strong>{item.checkoutHistory.length}</strong><span>checkout records</span></div>{item.checkoutHistory.length > 0 && <button className="secondary-button" type="button" onClick={() => setHistoryOpen(true)}>View history</button>}</div>}
            {item && <MapPanel
              locations={locations}
              selectedLocationId={item.locationId}
@@ -191,7 +198,9 @@ export function ItemPage({ id, onNavigate }: ItemPageProps) {
            />}
         </aside>
       </div>
-      {checkoutOpen && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false) }}><section className="bulk-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="bulk-modal-header"><div><p className="kicker">Item checkout</p><h2 id="checkout-title">Who is taking it?</h2></div><button type="button" onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">x</button></div><div className="bulk-modal-body checkout-fields"><label className="field"><span>Borrower</span><input autoFocus value={borrowerName} onChange={(event) => setBorrowerName(event.target.value)} maxLength={200} /></label><label className="field"><span>Notes <small>Optional</small></span><textarea value={checkoutNotes} onChange={(event) => setCheckoutNotes(event.target.value)} rows={3} maxLength={2000} /></label></div><div className="bulk-modal-actions"><button className="secondary-button" type="button" onClick={() => setCheckoutOpen(false)}>Cancel</button><button className="primary-button" type="button" disabled={!borrowerName.trim() || saving} onClick={() => void checkOut()}>{saving ? 'Checking out...' : 'Check out'}</button></div></section></div>}
+       {checkoutOpen && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setCheckoutOpen(false) }}><section className="bulk-modal" role="dialog" aria-modal="true" aria-labelledby="checkout-title"><div className="bulk-modal-header"><div><p className="kicker">Item checkout</p><h2 id="checkout-title">Who is taking it?</h2></div><button type="button" onClick={() => setCheckoutOpen(false)} aria-label="Close checkout">x</button></div><div className="bulk-modal-body checkout-fields"><label className="field"><span>Borrower</span><input autoFocus value={borrowerName} onChange={(event) => setBorrowerName(event.target.value)} maxLength={200} /></label><label className="field"><span>Notes <small>Optional</small></span><textarea value={checkoutNotes} onChange={(event) => setCheckoutNotes(event.target.value)} rows={3} maxLength={2000} /></label></div><div className="bulk-modal-actions"><button className="secondary-button" type="button" onClick={() => setCheckoutOpen(false)}>Cancel</button><button className="primary-button" type="button" disabled={!borrowerName.trim() || saving} onClick={() => void checkOut()}>{saving ? 'Checking out...' : 'Check out'}</button></div></section></div>}
+       {checkinOpen && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setCheckinOpen(false) }}><section className="bulk-modal" role="dialog" aria-modal="true" aria-labelledby="checkin-title"><div className="bulk-modal-header"><div><p className="kicker">Item check in</p><h2 id="checkin-title">Return this item?</h2></div><button type="button" onClick={() => setCheckinOpen(false)} disabled={saving} aria-label="Close check in">x</button></div><div className="bulk-modal-body checkout-fields"><label className="field"><span>Notes <small>Optional</small></span><textarea autoFocus value={checkinNotes} onChange={(event) => setCheckinNotes(event.target.value)} rows={3} maxLength={2000} placeholder="Return condition or detail" /></label></div><div className="bulk-modal-actions"><button className="secondary-button" type="button" onClick={() => setCheckinOpen(false)} disabled={saving}>Cancel</button><button className="primary-button" type="button" disabled={saving} onClick={() => void checkIn()}>{saving ? 'Checking in...' : 'Check in'}</button></div></section></div>}
+       {historyOpen && item && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setHistoryOpen(false) }}><section className="bulk-modal" role="dialog" aria-modal="true" aria-labelledby="history-title"><div className="bulk-modal-header"><div><p className="kicker">Record activity</p><h2 id="history-title">Checkout history</h2></div><button type="button" onClick={() => setHistoryOpen(false)} aria-label="Close checkout history">x</button></div><div className="history-list">{item.checkoutHistory.flatMap((checkout) => [<article className="history-entry" key={`${checkout.id}-out`}><strong>{checkout.borrowerName}</strong><span>Checked out {new Date(checkout.checkedOutAt).toLocaleString()}</span>{checkout.notes && <p>{checkout.notes}</p>}</article>, ...(checkout.returnedAt ? [<article className="history-entry" key={`${checkout.id}-in`}><strong>{checkout.borrowerName}</strong><span>Checked in {new Date(checkout.returnedAt).toLocaleString()}</span>{checkout.returnedNotes && <p>{checkout.returnedNotes}</p>}</article>] : [])])}</div><div className="bulk-modal-actions"><button className="secondary-button" type="button" onClick={() => setHistoryOpen(false)}>Close</button></div></section></div>}
     </main>
   )
 }

@@ -23,13 +23,54 @@ afterEach(() => {
 })
 
 describe('inventory navigation', () => {
-  it('loads the inventory list and location context on the main page', async () => {
+  it('filters by tag and selects only visible items from the column header', async () => {
+    const tag = { id: 'tools', name: 'Tools' }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/features')) return Response.json({ checkout: true, checkoutHistory: true })
+      if (url.startsWith('/api/items')) return Response.json([{ ...items[0], tags: [tag] }, { ...items[0], id: 'other', name: 'Other item' }])
+      if (url.startsWith('/api/tags')) return Response.json([tag])
+      if (url.startsWith('/api/locations')) return Response.json(locations)
+      return Response.json([])
+    }))
+    const { container } = render(<App />)
+    await screen.findByText('Other item')
+    fireEvent.change(screen.getByLabelText('Filter by tag'), { target: { value: 'tools' } })
+    expect(screen.queryByText('Other item')).toBeNull()
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all' })
+    expect(container.querySelector('.item-column-head')?.contains(selectAll)).toBe(true)
+    fireEvent.click(selectAll)
+    expect((screen.getByLabelText('Select Torque wrench') as HTMLInputElement).checked).toBe(true)
+    fireEvent.change(screen.getByLabelText('Filter by tag'), { target: { value: '' } })
+    expect((screen.getByLabelText('Select Other item') as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('filters inventory by a container and its descendants', async () => {
+    const shelf = { ...locations[0], id: 'shelf', name: 'Shelf', parentLocationId: 'house', childCount: 0 }
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.includes('/features')) return Response.json({ checkout: true, checkoutHistory: true })
+      if (url.startsWith('/api/items')) return Response.json([
+        { ...items[0], locationId: shelf.id, locationPath: 'House / Shelf' },
+        { ...items[0], id: 'loose', name: 'Loose item', locationId: 'unorganised', locationPath: 'Unorganised' },
+      ])
+      if (url.startsWith('/api/locations')) return Response.json([...locations, shelf])
+      return Response.json([])
+    }))
+    render(<App />)
+    await screen.findByText('Loose item')
+
+    fireEvent.change(screen.getByLabelText('Filter by container'), { target: { value: 'house' } })
+
+    expect(screen.getByText('Torque wrench')).toBeTruthy()
+    expect(screen.queryByText('Loose item')).toBeNull()
+  })
+
+  it('loads the inventory list and storage context on the main page', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.startsWith('/api/items')
       ? Response.json(items)
       : Response.json(locations)))
     render(<App />)
 
-    expect(screen.getByRole('heading', { name: /Find the thing/ })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /Find the thing/ })).toBeNull()
     expect(await screen.findByText('Torque wrench')).toBeTruthy()
     expect(screen.getByRole('img', { name: 'Saved space designer plan' })).toBeTruthy()
     expect(screen.getByRole('searchbox', { name: 'Search inventory' })).toBeTruthy()
@@ -46,18 +87,21 @@ describe('inventory navigation', () => {
     expect(window.location.pathname).toBe('/items/new')
     expect(screen.getByRole('heading', { name: /Give it a place/ })).toBeTruthy()
     expect(screen.getByLabelText('Name')).toBeTruthy()
-    await waitFor(() => expect((screen.getByLabelText('Storage location') as HTMLSelectElement).value).toBe('unorganised'))
+    await waitFor(() => expect((screen.getByLabelText('Storage container') as HTMLSelectElement).value).toBe('unorganised'))
   })
 
-  it('opens location creation from the main navigation', async () => {
+  it('opens container creation from Storage while preserving the route', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(locations)))
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: /Locations/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Storage' }))
 
     expect(window.location.pathname).toBe('/locations')
-    expect(await screen.findByRole('heading', { name: /Give everything/ })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /Add location/ })).toBeTruthy()
+     expect(await screen.findByText('Inventory / Storage')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Add container/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Your storage' })).toBeTruthy()
+    expect(screen.getByRole('option', { name: 'Top-level container' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Locations' })).toBeNull()
   })
 
   it('supports searching without moving the main workspace', async () => {
@@ -87,9 +131,9 @@ describe('inventory navigation', () => {
     render(<App />)
 
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Torque wrench' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Move location' }))
-    const dialog = screen.getByRole('dialog', { name: 'Move location' })
-    fireEvent.change(within(dialog).getByLabelText('New location'), { target: { value: 'unorganised' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Change container' }))
+    const dialog = screen.getByRole('dialog', { name: 'Change container' })
+    fireEvent.change(within(dialog).getByLabelText('New container'), { target: { value: 'unorganised' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Move items' }))
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/items/wrench', expect.objectContaining({ method: 'PUT' })))
@@ -161,7 +205,7 @@ describe('inventory navigation', () => {
     expect(await screen.findByText('Your inventory is ready for its first item.')).toBeTruthy()
   })
 
-  it('opens the interactive space designer with the location library', async () => {
+  it('opens the interactive space designer with the storage library', async () => {
     const internalLocation = {
       id: 'drawer', name: 'Top drawer', description: null, parentLocationId: 'house',
       locationType: 'Drawer', childCount: 0, itemCount: 0, isSystem: false, isInternalComponent: true,
@@ -172,15 +216,61 @@ describe('inventory navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Space designer' }))
 
     expect(window.location.pathname).toBe('/designer')
-    expect(screen.getByRole('heading', { name: /Shape your space/ })).toBeTruthy()
+     expect(screen.getByText('Spaces / Floor plan')).toBeTruthy()
     expect(screen.getByLabelText('Floor plan drawing canvas')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Wall/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Door/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Garage door/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Window/ })).toBeTruthy()
-    expect(await screen.findByRole('heading', { name: 'Your places' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /Storage library/ }))
+    expect(await screen.findByRole('heading', { name: 'Your containers' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: 'Storage library' })).toBeTruthy()
     expect(screen.getByRole('button', { name: /House/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Top drawer/ })).toBeNull()
+  })
+
+  it('resizes the shared tools/library sidebar with keyboard and captured pointers', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(locations)))
+    window.history.pushState({}, '', '/designer')
+    render(<App />)
+    const handle = screen.getByRole('separator', { name: 'Sidebar width' })
+    const shell = screen.getByRole('region', { name: 'Space designer' })
+    const capture = vi.fn()
+    const release = vi.fn()
+    Object.assign(handle, { setPointerCapture: capture, hasPointerCapture: () => true, releasePointerCapture: release })
+
+    expect(handle.getAttribute('aria-controls')).toBe(screen.getByRole('complementary', { name: 'Drawing tools' }).id)
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    expect(handle.getAttribute('aria-valuenow')).toBe('290')
+    fireEvent.keyDown(handle, { key: 'Home' })
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(handle.getAttribute('aria-valuenow')).toBe('220')
+    fireEvent.keyDown(handle, { key: 'End' })
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
+    expect(handle.getAttribute('aria-valuenow')).toBe('440')
+
+    fireEvent.click(screen.getByRole('button', { name: /Storage library/ }))
+    await screen.findByRole('button', { name: /House/ })
+    expect(screen.getByRole('separator')).toBe(handle)
+    expect(handle.getAttribute('aria-valuenow')).toBe('440')
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 7, clientX: 440 })
+    expect(capture).toHaveBeenCalledWith(7)
+    fireEvent.pointerMove(handle, { pointerId: 8, clientX: 100 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('440')
+    fireEvent.pointerMove(handle, { pointerId: 7, clientX: 320 })
+    expect(shell.style.getPropertyValue('--sidebar-width')).toBe('320px')
+    fireEvent.pointerUp(handle, { pointerId: 7 })
+    expect(release).toHaveBeenCalledWith(7)
+    fireEvent.pointerMove(handle, { pointerId: 7, clientX: 400 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('320')
+    fireEvent.pointerDown(handle, { button: 0, pointerId: 9, clientX: 320 })
+    fireEvent.pointerMove(handle, { pointerId: 9, clientX: -500 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('220')
+    fireEvent.pointerCancel(handle, { pointerId: 9 })
+    fireEvent.pointerMove(handle, { pointerId: 9, clientX: 500 })
+    expect(handle.getAttribute('aria-valuenow')).toBe('220')
+    fireEvent.click(screen.getByRole('button', { name: /Back to tools/ }))
+    expect(handle.getAttribute('aria-valuenow')).toBe('220')
   })
 
   it('draws a wall with pointer controls', async () => {
@@ -198,10 +288,11 @@ describe('inventory navigation', () => {
     expect(container.querySelectorAll('.plan-line--wall')).toHaveLength(6)
   })
 
-  it('places a location from the library onto the grid', async () => {
+  it('places a storage container from the library onto the grid', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(locations)))
     window.history.pushState({}, '', '/designer')
     const { container } = render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Storage library/ }))
     const location = await screen.findByRole('button', { name: /House/ })
     const canvas = screen.getByLabelText('Floor plan drawing canvas')
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 960, bottom: 608, width: 960, height: 608, toJSON: () => ({}) })
@@ -233,12 +324,12 @@ describe('inventory navigation', () => {
 
     fireEvent.change(screen.getByLabelText('Measurement unit'), { target: { value: 'm' } })
     fireEvent.change(screen.getByLabelText('Scale per grid square'), { target: { value: '0.5' } })
-    fireEvent.change(screen.getByLabelText('Grid size'), { target: { value: '40' } })
     fireEvent.change(screen.getByLabelText('Maximum design width'), { target: { value: '10' } })
     fireEvent.change(screen.getByLabelText('Maximum design height'), { target: { value: '5' } })
 
-    expect(screen.getByText('1 grid square = 0.5 m / 40 canvas units')).toBeTruthy()
-    expect(screen.getByLabelText('Floor plan drawing canvas').getAttribute('viewBox')).toBe('0 0 800 400')
-    expect(JSON.parse(window.localStorage.getItem('toolbox-space-plan-settings-v1') ?? '{}')).toEqual({ unit: 'm', perGrid: 0.5, gridSize: 40, maxWidth: 10, maxHeight: 5 })
+    expect(screen.queryByLabelText('Grid size')).toBeNull()
+    expect(screen.getByText('1 grid square = 0.5 m')).toBeTruthy()
+    expect(screen.getByLabelText('Floor plan drawing canvas').getAttribute('viewBox')).toBe('0 0 400 200')
+    expect(JSON.parse(window.localStorage.getItem('toolbox-space-plan-settings-v1') ?? '{}')).toEqual({ unit: 'm', perGrid: 0.5, gridSize: 20, maxWidth: 10, maxHeight: 5 })
   })
 })

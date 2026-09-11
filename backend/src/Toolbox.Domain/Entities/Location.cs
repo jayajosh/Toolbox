@@ -35,7 +35,7 @@ public sealed class Location
         LocationType = Guard.Required(locationType, nameof(locationType), LocationTypeMaxLength);
         if (isInternalComponent && parentLocationId is null)
         {
-            throw new ArgumentException("An internal component must have a parent location.", nameof(parentLocationId));
+            throw new ArgumentException("An internal component must have a parent storage container.", nameof(parentLocationId));
         }
         IsInternalComponent = isInternalComponent;
         Color = Guard.Required(color, nameof(color), ColorMaxLength);
@@ -102,12 +102,12 @@ public sealed class Location
     {
         if (parentLocationId == Id)
         {
-            throw new ArgumentException("A location cannot be its own parent.", nameof(parentLocationId));
+            throw new ArgumentException("A storage container cannot be its own parent.", nameof(parentLocationId));
         }
 
         if (parentLocationId is null && IsInternalComponent)
         {
-            throw new ArgumentException("An internal component must have a parent location.", nameof(parentLocationId));
+            throw new ArgumentException("An internal component must have a parent storage container.", nameof(parentLocationId));
         }
 
         ParentLocationId = parentLocationId;
@@ -118,7 +118,7 @@ public sealed class Location
     {
         if (isInternalComponent && ParentLocationId is null)
         {
-            throw new ArgumentException("An internal component must have a parent location.", nameof(isInternalComponent));
+            throw new ArgumentException("An internal component must have a parent storage container.", nameof(isInternalComponent));
         }
 
         IsInternalComponent = isInternalComponent;

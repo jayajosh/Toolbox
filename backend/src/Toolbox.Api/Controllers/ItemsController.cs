@@ -10,8 +10,10 @@ namespace Toolbox.Api.Controllers;
 
 [ApiController]
 [Route("api/items")]
-public sealed class ItemsController(ItemService service) : ControllerBase
+public sealed class ItemsController(ItemService service, ItemFeatureOptions features) : ControllerBase
 {
+    [HttpGet("features")]
+    public object Features() => new { checkout = features.Checkout, checkoutHistory = features.CheckoutHistory };
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<ItemSummaryResponse>>> List(
         [FromQuery] string? search,
@@ -163,11 +165,11 @@ public sealed class ItemsController(ItemService service) : ControllerBase
     }
 
     [HttpPost("{id:guid}/checkin")]
-    public async Task<ActionResult<ItemDetails>> Checkin(Guid id, CancellationToken cancellationToken)
+    public async Task<ActionResult<ItemDetails>> Checkin(Guid id, CheckinItemRequest? request, CancellationToken cancellationToken)
     {
         try
         {
-            return Ok(await service.CheckinAsync(id, cancellationToken));
+            return Ok(await service.CheckinAsync(id, new CheckinItemCommand(request?.Notes), cancellationToken));
         }
         catch (ItemNotFoundException exception) { return NotFound(new { error = exception.Message }); }
         catch (ItemConflictException exception) { return Conflict(new { error = exception.Message }); }
@@ -204,3 +206,4 @@ public sealed record QuickAddItemsRequest(
 }
 
 public sealed record CheckoutItemRequest(string BorrowerName, string? Notes = null);
+public sealed record CheckinItemRequest(string? Notes = null);

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Toolbox.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Toolbox.Infrastructure.Persistence;
 namespace Toolbox.Infrastructure.Migrations
 {
     [DbContext(typeof(ToolboxDbContext))]
-    partial class ToolboxDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260910230351_AddCheckoutReturnNotes")]
+    partial class AddCheckoutReturnNotes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

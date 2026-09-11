@@ -10,9 +10,11 @@ public sealed class ItemService(
     IItemRepository itemRepository,
     ILocationRepository locationRepository,
     ITagRepository? tagRepository = null,
-    IFamilyRepository? familyRepository = null)
+    IFamilyRepository? familyRepository = null,
+    ItemFeatureOptions? featureOptions = null)
 {
     private const int MaxQuickAddItems = 100;
+    private readonly ItemFeatureOptions features = featureOptions ?? new ItemFeatureOptions();
 
     public async Task<IReadOnlyList<ItemSummary>> ListAsync(
         string? search,
@@ -144,6 +146,7 @@ public sealed class ItemService(
 
     public async Task<ItemDetails> CheckoutAsync(Guid id, CheckoutItemCommand command, CancellationToken cancellationToken)
     {
+        if (!features.Checkout) throw new ItemConflictException("Checkout is disabled.");
         var item = await itemRepository.GetAsync(id, includeCheckoutHistory: true, cancellationToken)
             ?? throw new ItemNotFoundException(id);
         if (item.Checkouts.Any(checkout => checkout.IsActive))
@@ -156,13 +159,14 @@ public sealed class ItemService(
         return await GetAsync(id, cancellationToken);
     }
 
-    public async Task<ItemDetails> CheckinAsync(Guid id, CancellationToken cancellationToken)
+    public async Task<ItemDetails> CheckinAsync(Guid id, CheckinItemCommand command, CancellationToken cancellationToken)
     {
+        if (!features.Checkout) throw new ItemConflictException("Checkout is disabled.");
         var item = await itemRepository.GetAsync(id, includeCheckoutHistory: true, cancellationToken)
             ?? throw new ItemNotFoundException(id);
         var checkout = item.Checkouts.SingleOrDefault(candidate => candidate.IsActive)
             ?? throw new ItemConflictException("This item is not checked out.");
-        checkout.Return();
+        checkout.Return(command.Notes);
         await itemRepository.SaveChangesAsync(cancellationToken);
         return await GetAsync(id, cancellationToken);
     }
@@ -251,7 +255,7 @@ public sealed class ItemService(
             item.IsConsumable,
             item.ConsumableStatus);
 
-    private static ItemDetails ToDetails(
+    private ItemDetails ToDetails(
         Item item,
         IReadOnlyDictionary<Guid, Location> locations) =>
         new(
@@ -262,10 +266,9 @@ public sealed class ItemService(
             locations[item.LocationId].Color,
             item.Checkouts.Any(checkout => checkout.IsActive),
             ToActiveCheckout(item),
-            item.Checkouts
-                .OrderByDescending(checkout => checkout.CheckedOutAt)
-                .Select(ToCheckoutSummary)
-                .ToArray(),
+            features.CheckoutHistory
+                ? item.Checkouts.OrderByDescending(checkout => checkout.CheckedOutAt).Select(ToCheckoutSummary).ToArray()
+                : [],
             ToFamilyReference(item),
             ToTagReferences(item),
             item.IsConsumable,
@@ -296,7 +299,8 @@ public sealed class ItemService(
             checkout.CheckedOutAt,
             checkout.ReturnedAt,
             checkout.BorrowerName,
-            checkout.Notes);
+            checkout.Notes,
+            checkout.ReturnedNotes);
 
     private static string BuildLocationPath(
         Guid locationId,

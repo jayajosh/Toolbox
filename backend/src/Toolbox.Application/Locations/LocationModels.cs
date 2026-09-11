@@ -78,7 +78,7 @@ public sealed class LocationTreeNode
 }
 
 public sealed class LocationNotFoundException(Guid id)
-    : Exception($"Location '{id}' was not found.");
+    : Exception($"Storage container '{id}' was not found.");
 
 public sealed class LocationConflictException(string message) : Exception(message);
 

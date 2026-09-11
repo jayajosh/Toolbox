@@ -18,7 +18,8 @@ Toolbox is a self-hosted household/workshop inventory, storage mapping and item 
 
 - Use a modular monolith.
 - Keep domain logic separate from controllers and UI.
-- Model physical locations as an arbitrary hierarchy.
+- Model storage containers as an arbitrary hierarchy.
+- Use Storage for UI sections, storage container for entities, and Container in compact controls. Preserve internal Location identifiers and existing API/data contracts.
 - Use database migrations.
 - Add meaningful automated tests.
 - Keep the UI mobile-friendly.
@@ -34,9 +35,8 @@ Toolbox should make it extremely quick to answer:
 
 Core concepts are:
 - items
-- nested physical locations
+- nested storage containers
 - search
-- QR location labels
 - checkout / return
 - checkout history
 

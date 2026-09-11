@@ -1,22 +1,13 @@
-import { useDeferredValue, useEffect, useState, type CSSProperties } from 'react'
-import { checkoutItem, deleteItem, listFamilies, listItems, listLocations, listTags, updateItem } from '../api'
+import { useDeferredValue, useEffect, useState } from 'react'
+import './InventoryPage.css'
+import { checkoutItem, deleteItem, getItemFeatures, listFamilies, listItems, listLocations, listTags, updateItem } from '../api'
 import { MapPanel } from '../components/MapPanel'
+import { ItemTable } from '../components/ItemTable'
+import { isLocationWithin, locationPath } from '../locationHierarchy'
 import type { FamilySummary, Item, ItemInput, Location, Tag } from '../types'
 
 type InventoryPageProps = { onNavigate: (path: string) => void }
 type BulkModal = 'move' | 'delete' | 'family' | 'tags' | 'checkout'
-
-function isUnder(item: Item, locationId: string, locations: Location[]) {
-  const byId = new Map(locations.map((location) => [location.id, location]))
-  let current = byId.get(item.locationId)
-  const visited = new Set<string>()
-  while (current && !visited.has(current.id)) {
-    if (current.id === locationId) return true
-    visited.add(current.id)
-    current = current.parentLocationId ? byId.get(current.parentLocationId) : undefined
-  }
-  return false
-}
 
 function pathFor<T extends { id: string; name: string }>(entry: T, entries: T[], parentIdFor: (entry: T) => string | null) {
   const byId = new Map(entries.map((candidate) => [candidate.id, candidate]))
@@ -53,6 +44,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const deferredSearch = useDeferredValue(search)
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
   const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null)
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null)
   const [loadedSearch, setLoadedSearch] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set())
@@ -64,6 +56,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const [bulkAction, setBulkAction] = useState<string | null>(null)
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [bulkModal, setBulkModal] = useState<BulkModal | null>(null)
+  const [features, setFeatures] = useState({ checkout: true, checkoutHistory: true })
   const loading = loadedSearch !== deferredSearch
 
   useEffect(() => {
@@ -73,12 +66,14 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
       listLocations(controller.signal),
       listFamilies(controller.signal),
       listTags('', controller.signal),
+      getItemFeatures(controller.signal),
     ])
-      .then(([nextItems, nextLocations, nextFamilies, nextTags]) => {
+      .then(([nextItems, nextLocations, nextFamilies, nextTags, nextFeatures]) => {
         setItems(nextItems)
         setLocations(nextLocations)
         setFamilies(nextFamilies)
         setTags(nextTags)
+        setFeatures(nextFeatures)
         setSelectedItemIds((current) => new Set([...current].filter((id) => nextItems.some((item) => item.id === id))))
         setError(null)
         setLoadedSearch(deferredSearch)
@@ -109,16 +104,16 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   }, [bulkAction, bulkModal])
 
   const locationItems = selectedLocationId
-    ? items.filter((item) => isUnder(item, selectedLocationId, locations))
+    ? items.filter((item) => isLocationWithin(item.locationId, selectedLocationId, locations))
     : items
-  const visibleItems = selectedFamilyId
-    ? locationItems.filter((item) => item.family?.id === selectedFamilyId)
-    : locationItems
+  const visibleItems = locationItems.filter((item) =>
+    (!selectedFamilyId || item.family?.id === selectedFamilyId)
+    && (!selectedTagId || item.tags.some((tag) => tag.id === selectedTagId)))
   const checkedOut = visibleItems.filter((item) => item.isCheckedOut).length
   const selectedItems = items.filter((item) => selectedItemIds.has(item.id))
   const allVisibleSelected = visibleItems.length > 0 && visibleItems.every((item) => selectedItemIds.has(item.id))
   const locationOptions = locations
-    .map((location) => ({ location, path: pathFor(location, locations, (entry) => entry.parentLocationId) }))
+    .map((location) => ({ location, path: locationPath(location, locations) }))
     .sort((a, b) => a.path.localeCompare(b.path))
   const familyOptions = families
     .map((family) => ({ family, path: pathFor(family, families, (entry) => entry.parentFamilyId) }))
@@ -215,17 +210,6 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
 
   return (
     <main className="app-main">
-      <section className="inventory-hero">
-        <div>
-          <p className="kicker">Inventory / Overview</p>
-          <h1>Find the thing.<br /><em>Know its place.</em></h1>
-          <p className="hero-copy">A clear view of everything you keep, from the house to the smallest drawer.</p>
-        </div>
-        <button className="primary-button hero-action" type="button" onClick={() => onNavigate('/items/new')}>
-          <span className="plus">+</span> Add an item
-        </button>
-      </section>
-
       <section className="search-bar" aria-label="Inventory search">
         <span className="search-icon" aria-hidden="true" />
         <label className="sr-only" htmlFor="inventory-search">Search inventory</label>
@@ -236,11 +220,14 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
           placeholder="Search items, families, or tags..."
           type="search"
         />
+        <button className="primary-button inventory-search-action" type="button" onClick={() => onNavigate('/items/new')}>
+          <span className="plus">+</span> Add an item
+        </button>
       </section>
 
       <section className="stats-row" aria-label="Inventory summary">
         <div><span className="stat-value">{visibleItems.length}</span><span className="stat-label">Items in view</span></div>
-        <div><span className="stat-value">{locations.length}</span><span className="stat-label">Locations mapped</span></div>
+        <div><span className="stat-value">{locations.length}</span><span className="stat-label">Storage containers</span></div>
         <div><span className="stat-value stat-value--warm">{checkedOut}</span><span className="stat-label">Checked out</span></div>
         <div className="stats-note"><span className="pulse-dot" /> Live from your toolbox</div>
       </section>
@@ -252,20 +239,29 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
               <p className="kicker">Current collection</p>
               <h2>{selectedLocationId ? 'Items in this space' : 'All items'}</h2>
             </div>
-            <div className="collection-controls">
-              {visibleItems.length > 0 && <label className="select-all"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleItems} /> Select all</label>}
-              <label className="sr-only" htmlFor="family-filter">Filter by family</label>
+             <div className="collection-controls">
+               <label className="sr-only" htmlFor="location-filter">Filter by container</label>
+               <select id="location-filter" value={selectedLocationId ?? ''} onChange={(event) => setSelectedLocationId(event.target.value || null)}>
+                 <option value="">All containers</option>
+                 {locationOptions.map(({ location, path }) => <option key={location.id} value={location.id}>{path}</option>)}
+               </select>
+               <label className="sr-only" htmlFor="family-filter">Filter by family</label>
               <select id="family-filter" value={selectedFamilyId ?? ''} onChange={(event) => setSelectedFamilyId(event.target.value || null)}>
                 <option value="">All families</option>
                 {families.map((family) => <option key={family.id} value={family.id}>{family.name} ({family.itemCount})</option>)}
+              </select>
+              <label className="sr-only" htmlFor="tag-filter">Filter by tag</label>
+              <select id="tag-filter" value={selectedTagId ?? ''} onChange={(event) => setSelectedTagId(event.target.value || null)}>
+                <option value="">All tags</option>
+                {tags.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}
               </select>
               <span className="result-count">{visibleItems.length} records</span>
             </div>
           </div>
           {selectedItems.length > 0 && (
             <div className="bulk-toolbar" aria-label={`${selectedItems.length} selected items`}>
-              <button type="button" onClick={() => openBulkModal('move')}>Move location</button>
-              <button type="button" onClick={() => openBulkModal('checkout')}>Check out</button>
+              <button type="button" onClick={() => openBulkModal('move')}>Change container</button>
+              {features.checkout && <button type="button" onClick={() => openBulkModal('checkout')}>Check out</button>}
               <button type="button" onClick={() => openBulkModal('delete')}>Delete</button>
               <button type="button" onClick={() => openBulkModal('family')}>Add to family</button>
               <button type="button" onClick={() => openBulkModal('tags')}>Add tags</button>
@@ -281,28 +277,8 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
               {!search && <button className="secondary-button" type="button" onClick={() => onNavigate('/items/new')}>Add your first item</button>}
             </div>
           )}
-           {!loading && !error && visibleItems.length > 0 && (
-             <div className="item-list">
-               <div className="item-column-head" aria-hidden="true"><span /><span>Item</span><span>Location</span><span>Status</span><span /></div>
-               {visibleItems.map((item) => (
-                <div className={`item-row${selectedItemIds.has(item.id) ? ' is-selected' : ''}`} key={item.id}>
-                  <input className="item-select" type="checkbox" checked={selectedItemIds.has(item.id)} onChange={() => toggleItem(item.id)} aria-label={`Select ${item.name}`} />
-                  <button className="item-row-main" type="button" onClick={() => onNavigate(`/items/${item.id}`)}>
-                    <span className="item-info">
-                      <strong>{item.name}</strong>
-                      {item.family?.name && <span>{item.family.name}</span>}
-                      {item.tags.length > 0 && <span className="item-tags">{item.tags.map((tag) => <span className="item-tag-chip" key={tag.id}>{tag.name}</span>)}</span>}
-                    </span>
-                    <span className="item-location" style={{ '--location-color': item.locationColor } as CSSProperties}><span className="pin" aria-hidden="true" />{item.locationPath}</span>
-                    <span className={`item-status ${item.isCheckedOut ? 'item-status--out' : ''}`}>
-                      {item.isCheckedOut ? 'Out' : 'Here'}
-                      {item.isConsumable && <small>{item.consumableStatus === 'low' ? 'Low stock' : item.consumableStatus === 'out' ? 'Out of stock' : 'Stock not set'}</small>}
-                    </span>
-                    <span className="row-arrow" aria-hidden="true">&gt;</span>
-                  </button>
-                </div>
-              ))}
-            </div>
+          {!loading && !error && visibleItems.length > 0 && (
+            <ItemTable items={visibleItems} selectedItemIds={selectedItemIds} onToggleItem={toggleItem} onToggleAll={toggleVisibleItems} onNavigate={onNavigate} />
           )}
         </div>
         <MapPanel
@@ -319,12 +295,12 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
             <div className="bulk-modal-header">
               <div>
                 <p className="kicker">{selectedItems.length} selected</p>
-                <h2 id="bulk-modal-title">{bulkModal === 'move' ? 'Move location' : bulkModal === 'delete' ? 'Delete items?' : bulkModal === 'family' ? 'Add to family' : bulkModal === 'checkout' ? 'Check out items' : 'Add tags'}</h2>
+                <h2 id="bulk-modal-title">{bulkModal === 'move' ? 'Change container' : bulkModal === 'delete' ? 'Delete items?' : bulkModal === 'family' ? 'Add to family' : bulkModal === 'checkout' ? 'Check out items' : 'Add tags'}</h2>
               </div>
               <button type="button" onClick={closeBulkModal} disabled={bulkAction !== null} aria-label="Close bulk edit">x</button>
             </div>
             <div className="bulk-modal-body">
-              {bulkModal === 'move' && <label className="field" htmlFor="bulk-location">New location<select id="bulk-location" value={bulkLocationId} onChange={(event) => setBulkLocationId(event.target.value)} autoFocus><option value="">Choose a location</option>{locationOptions.map(({ location, path }) => <option key={location.id} value={location.id}>{path}</option>)}</select></label>}
+              {bulkModal === 'move' && <label className="field" htmlFor="bulk-location">New container<select id="bulk-location" value={bulkLocationId} onChange={(event) => setBulkLocationId(event.target.value)} autoFocus><option value="">Choose a container</option>{locationOptions.map(({ location, path }) => <option key={location.id} value={location.id}>{path}</option>)}</select></label>}
               {bulkModal === 'family' && <label className="field" htmlFor="bulk-family">Family<select id="bulk-family" value={bulkFamilyId} onChange={(event) => setBulkFamilyId(event.target.value)} autoFocus><option value="">Choose a family</option>{familyOptions.map(({ family, path }) => <option key={family.id} value={family.id}>{path}</option>)}</select></label>}
               {bulkModal === 'checkout' && <div className="checkout-fields"><label className="field"><span>Borrower</span><input value={borrowerName} onChange={(event) => setBorrowerName(event.target.value)} autoFocus required maxLength={200} placeholder="Who is taking these items?" /></label><label className="field"><span>Notes <small>Optional</small></span><textarea value={checkoutNotes} onChange={(event) => setCheckoutNotes(event.target.value)} rows={3} maxLength={2000} placeholder="Project or return detail" /></label></div>}
               {bulkModal === 'tags' && <div className="modal-tag-list">{tags.length ? tags.map((tag, index) => <label key={tag.id}><input type="checkbox" checked={bulkTagIds.includes(tag.id)} onChange={() => setBulkTagIds((current) => current.includes(tag.id) ? current.filter((id) => id !== tag.id) : [...current, tag.id])} autoFocus={index === 0} /> <span>{tag.name}</span></label>) : <p>No tags are available yet.</p>}</div>}

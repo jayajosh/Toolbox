@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { Location } from '../types'
 
 type Point = { x: number; y: number }
@@ -43,7 +44,11 @@ type MapPanelProps = {
 export function MapPanel({ locations, selectedLocationId, onSelectLocation, onAddLocation, onDesignSpace }: MapPanelProps) {
   const plan = getPlan()
   const locationsById = new Map(locations.map((location) => [location.id, location]))
-  const selectedLocation = selectedLocationId ? locationsById.get(selectedLocationId) : null
+  const mappedLocationIds = new Set(plan.flatMap((element) => element.type === 'area' && element.locationId ? [element.locationId] : []))
+  let selectedLocation = selectedLocationId ? locationsById.get(selectedLocationId) : undefined
+  while (selectedLocation && !mappedLocationIds.has(selectedLocation.id)) {
+    selectedLocation = selectedLocation.parentLocationId ? locationsById.get(selectedLocation.parentLocationId) : undefined
+  }
 
   return (
     <section className="map-card" aria-labelledby="map-title">
@@ -53,7 +58,7 @@ export function MapPanel({ locations, selectedLocationId, onSelectLocation, onAd
           <h2 id="map-title">Floor plan</h2>
         </div>
         {(onAddLocation || onDesignSpace) && <div className="map-header-actions">
-          {onAddLocation && <button className="map-add-button" type="button" onClick={onAddLocation}><span aria-hidden="true">+</span> Add location</button>}
+          {onAddLocation && <button className="map-add-button" type="button" onClick={onAddLocation}><span aria-hidden="true">+</span> Add container</button>}
         </div>}
       </div>
       <div className="map-canvas" aria-label="Floor plan preview">
@@ -64,9 +69,9 @@ export function MapPanel({ locations, selectedLocationId, onSelectLocation, onAd
           {plan.map((element) => {
             if (element.type === 'area') {
               const linkedLocation = element.locationId ? locationsById.get(element.locationId) : undefined
-              const isSelected = linkedLocation?.id === selectedLocationId
+              const isSelected = linkedLocation?.id === selectedLocation?.id
               return <g key={element.id} className={`preview-area${isSelected ? ' is-selected' : ''}`} onClick={() => linkedLocation && onSelectLocation(isSelected ? null : linkedLocation.id)}>
-                <rect x={element.x} y={element.y} width={element.width} height={element.height} />
+                <rect style={{ '--area-color': linkedLocation?.color ?? '#728a77' } as CSSProperties} x={element.x} y={element.y} width={element.width} height={element.height} />
                 {element.width > 75 && element.height > 48 && <text x={element.x + element.width / 2} y={element.y + element.height / 2}>{element.label}</text>}
               </g>
             }

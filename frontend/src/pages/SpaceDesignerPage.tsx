@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { createLocation, listLocations } from '../api'
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import './SpaceDesignerPage.css'
+import { createLocation, deleteLocation, listLocations } from '../api'
 import type { Location } from '../types'
 
 type Point = { x: number; y: number }
@@ -18,7 +19,6 @@ type Interaction = {
   handle?: string
 }
 
-type SpaceDesignerPageProps = { onNavigate: (path: string) => void }
 type MeasurementUnit = 'ft' | 'in' | 'm' | 'cm' | 'mm'
 type MeasurementSettings = { unit: MeasurementUnit; perGrid: number; gridSize: number; maxWidth: number; maxHeight: number }
 
@@ -53,7 +53,7 @@ function Icon({ children }: { children: ReactNode }) {
 const toolDetails: { tool: Tool; label: string; shortcut: string; icon: ReactNode }[] = [
   { tool: 'select', label: 'Select', shortcut: 'V', icon: <Icon><path d="M6 3l11 8-5 1.5L9 18z" /></Icon> },
   { tool: 'wall', label: 'Wall', shortcut: 'W', icon: <Icon><path d="M4 17L18 5l2 2L6 19z" /></Icon> },
-  { tool: 'area', label: 'Rectangle', shortcut: 'R', icon: <Icon><rect x="4" y="5" width="16" height="14" rx="1" /></Icon> },
+  { tool: 'area', label: 'Container', shortcut: 'R', icon: <Icon><rect x="4" y="5" width="16" height="14" rx="1" /></Icon> },
   { tool: 'door', label: 'Door', shortcut: 'D', icon: <Icon><path d="M5 20V4h11v16M6 19h12M16 5l-7 2v12" /></Icon> },
   { tool: 'garageDoor', label: 'Garage door', shortcut: 'G', icon: <Icon><path d="M3 20V8l3-4h12l3 4v12M6 20V8h12v12M6 12h12M6 16h12" /></Icon> },
   { tool: 'window', label: 'Window', shortcut: 'N', icon: <Icon><path d="M4 8h16M4 16h16M7 5v14M17 5v14" /></Icon> },
@@ -120,7 +120,7 @@ function locationPath(location: Location, locations: Location[]) {
   return names.join(' / ')
 }
 
-export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
+export function SpaceDesignerPage() {
   const [elements, setElements] = useState<PlanElement[]>(loadPlan)
   const [tool, setTool] = useState<Tool>('select')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -133,10 +133,15 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
   const [locations, setLocations] = useState<Location[]>([])
   const [locationError, setLocationError] = useState<string | null>(null)
   const [pendingArea, setPendingArea] = useState<{ id: string; before: PlanElement[] } | null>(null)
+  const [libraryOpen, setLibraryOpen] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(280)
+  const sidebarDrag = useRef<{ pointerId: number; x: number; width: number } | null>(null)
   const [newLocationName, setNewLocationName] = useState('')
   const [newLocationParentId, setNewLocationParentId] = useState<string | null>(null)
   const [creatingLocation, setCreatingLocation] = useState(false)
+  const [deletingLocation, setDeletingLocation] = useState(false)
   const svgRef = useRef<SVGSVGElement>(null)
+  const storageLabelRef = useRef<HTMLInputElement>(null)
 
   const selected = elements.find((element) => element.id === selectedId) ?? null
   const canvasWidth = Math.max(measurementSettings.gridSize, Math.round(measurementSettings.maxWidth / measurementSettings.perGrid) * measurementSettings.gridSize)
@@ -161,7 +166,7 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
       })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === 'AbortError') return
-        setLocationError(reason instanceof Error ? reason.message : 'Could not load locations.')
+        setLocationError(reason instanceof Error ? reason.message : 'Could not load storage containers.')
       })
     return () => controller.abort()
   }, [])
@@ -195,6 +200,16 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
   function pointFromEvent(event: ReactPointerEvent<SVGElement>) {
     const rect = svgRef.current!.getBoundingClientRect()
     return clampPoint({ x: snap((event.clientX - rect.left) / zoom), y: snap((event.clientY - rect.top) / zoom) })
+  }
+
+  function resizeSidebar(width: number) {
+    setSidebarWidth(Math.min(440, Math.max(220, Math.round(width))))
+  }
+
+  function endSidebarResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (sidebarDrag.current?.pointerId !== event.pointerId) return
+    sidebarDrag.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
   function saveChange(next: PlanElement[]) {
@@ -376,7 +391,7 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
       setPendingArea(null)
       setTool('select')
     } catch (reason: unknown) {
-      setLocationError(reason instanceof Error ? reason.message : 'Could not create this location.')
+      setLocationError(reason instanceof Error ? reason.message : 'Could not create this storage container.')
     } finally {
       setCreatingLocation(false)
     }
@@ -393,6 +408,24 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
     if (!selectedId) return
     saveChange(elements.filter((element) => element.id !== selectedId))
     setSelectedId(null)
+  }
+
+  async function removeSelectedContainer() {
+    if (!selected || selected.type !== 'area' || deletingLocation) return
+    setLocationError(null)
+    if (selected.locationId) {
+      setDeletingLocation(true)
+      try {
+        await deleteLocation(selected.locationId)
+        setLocations((current) => current.filter((location) => location.id !== selected.locationId))
+      } catch (reason: unknown) {
+        setLocationError(reason instanceof Error ? reason.message : 'Could not delete this storage container.')
+        setDeletingLocation(false)
+        return
+      }
+      setDeletingLocation(false)
+    }
+    removeSelected()
   }
 
   function updateSelected(patch: Partial<PlanElement>) {
@@ -419,9 +452,10 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
   function renderElement(element: PlanElement) {
     const isSelected = element.id === selectedId
     if (element.type === 'area') {
+      const locationColor = locations.find((location) => location.id === element.locationId)?.color ?? '#728a77'
       return (
         <g key={element.id} className={`plan-area${isSelected ? ' is-selected' : ''}`} onPointerDown={(event) => startEditing(event, element)}>
-          <rect className="plan-area-shape" x={element.x} y={element.y} width={element.width} height={element.height} />
+          <rect className="plan-area-shape" style={{ '--area-color': locationColor } as CSSProperties} x={element.x} y={element.y} width={element.width} height={element.height} />
           {element.width > 50 && element.height > 35 && <>
             <text x={element.x + element.width / 2} y={element.y + element.height / 2 - 5}>{element.label}</text>
             <text className="plan-measure" x={element.x + element.width / 2} y={element.y + element.height / 2 + 15}>{formatMeasurement(element.width, measurementSettings)} x {formatMeasurement(element.height, measurementSettings)}</text>
@@ -468,14 +502,25 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
     )
   }
 
+  function renderCanvasControls() {
+    return <div className="canvas-controls">
+      <button className={snapEnabled ? 'snap-toggle is-active' : 'snap-toggle'} type="button" onClick={() => setSnapEnabled((enabled) => !enabled)}><span className="snap-icon" /> Snap {snapEnabled ? 'on' : 'off'}</button>
+      <span className="control-divider" />
+      <label className="measurement-select"><span>Units</span><select aria-label="Measurement unit" value={measurementSettings.unit} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, unit: event.target.value as MeasurementUnit }))}><option value="ft">Feet</option><option value="in">Inches</option><option value="m">Metres</option><option value="cm">Centimetres</option><option value="mm">Millimetres</option></select></label>
+      <label className="toolbar-scale"><span>Per square</span><input aria-label="Scale per grid square" type="number" min="0.01" step="0.1" value={measurementSettings.perGrid} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, perGrid: Math.max(.01, Number(event.target.value)) }))} /></label>
+      <label className="toolbar-design-size"><span>Max</span><input aria-label="Maximum design width" type="number" min="1" step="0.5" value={measurementSettings.maxWidth} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, maxWidth: Math.max(1, Number(event.target.value)) }))} /><span>&times;</span><input aria-label="Maximum design height" type="number" min="1" step="0.5" value={measurementSettings.maxHeight} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, maxHeight: Math.max(1, Number(event.target.value)) }))} /><small>{measurementSettings.unit}</small></label>
+      <button type="button" onClick={() => setZoom((value) => Math.max(.5, value - .1))} aria-label="Zoom out">&minus;</button>
+      <span className="zoom-value">{Math.round(zoom * 100)}%</span>
+      <button type="button" onClick={() => setZoom((value) => Math.min(1.5, value + .1))} aria-label="Zoom in">+</button>
+    </div>
+  }
+
   return (
     <main className="designer-page">
-      <header className="designer-heading">
-        <div>
-          <button className="back-link" type="button" onClick={() => onNavigate('/')}><span aria-hidden="true">&larr;</span> Back to inventory</button>
-          <p className="kicker">Spaces / Floor plan</p>
-          <h1>Shape your <em>space.</em></h1>
-        </div>
+        <header className="designer-heading">
+          <div>
+            <p className="kicker">Spaces / Floor plan</p>
+          </div>
         <div className="designer-heading-actions">
           <span className="save-status"><span /> Saved locally</span>
           <button className="secondary-button" type="button" onClick={clearPlan}>New plan</button>
@@ -483,31 +528,65 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
         </div>
       </header>
 
-      <section className="designer-shell" aria-label="Space designer">
-        <aside className="designer-tools" aria-label="Drawing tools">
-          <span className="tool-section-label">Tools</span>
-          {toolDetails.map((item) => <button key={item.tool} className={tool === item.tool ? 'designer-tool is-active' : 'designer-tool'} type="button" onClick={() => setTool(item.tool)} title={`${item.label} (${item.shortcut})`}>{item.icon}<span>{item.label}</span><kbd>{item.shortcut}</kbd></button>)}
-          <div className="tool-divider" />
-          <button className="designer-tool designer-tool--compact" type="button" onClick={undo} disabled={!undoStack.length} title="Undo"><Icon><path d="M9 7H5v-4M5 7c2-3 5-4 8-3 4 1 7 5 6 9s-5 7-9 6c-2 0-4-2-5-4" /></Icon><span>Undo</span></button>
-          <button className="designer-tool designer-tool--compact" type="button" onClick={redo} disabled={!redoStack.length} title="Redo"><Icon><path d="M15 7h4v-4M19 7c-2-3-5-4-8-3-4 1-7 5-6 9s5 7 9 6c2 0 4-2 5-4" /></Icon><span>Redo</span></button>
-        </aside>
+      <section className={libraryOpen ? 'designer-shell is-library-open' : 'designer-shell'} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} aria-label="Space designer">
+         <aside id="designer-sidebar" className={libraryOpen ? 'designer-tools is-library' : 'designer-tools'} aria-label={libraryOpen ? 'Storage library' : 'Drawing tools'}>
+           {!libraryOpen ? <>
+              <span className="tool-section-label">Tools</span>
+              {toolDetails.map((item) => <button key={item.tool} className={tool === item.tool ? 'designer-tool is-active' : 'designer-tool'} type="button" onClick={() => setTool(item.tool)} title={`${item.label} (${item.shortcut})`}>{item.icon}<span>{item.label}</span><kbd>{item.shortcut}</kbd></button>)}
+              <button className="designer-tool library-toggle" type="button" onClick={() => setLibraryOpen(true)}><Icon><path d="M4 6h16M4 12h16M4 18h16" /></Icon><span>Storage library</span></button>
+              <div className="tool-divider" />
+             <button className="designer-tool designer-tool--compact" type="button" onClick={undo} disabled={!undoStack.length} title="Undo"><Icon><path d="M9 7H5v-4M5 7c2-3 5-4 8-3 4 1 7 5 6 9s-5 7-9 6c-2 0-4-2-5-4" /></Icon><span>Undo</span></button>
+             <button className="designer-tool designer-tool--compact" type="button" onClick={redo} disabled={!redoStack.length} title="Redo"><Icon><path d="M15 7h4v-4M19 7c-2-3-5-4-8-3-4 1-7 5-6 9s5 7 9 6c2 0 4-2 5-4" /></Icon><span>Redo</span></button>
+           </> : <section className="location-library" aria-labelledby="location-library-title">
+             <button className="library-back" type="button" onClick={() => setLibraryOpen(false)}><span aria-hidden="true">&larr;</span> Back to tools</button>
+              <div className="library-heading"><div><p className="kicker">Storage library</p><h2 id="location-library-title">Your containers</h2></div></div>
+             <p className="library-help">Drag a storage container onto the plan, or click to place it.</p>
+             {locationError && !pendingArea && <p className="library-error" role="alert">{locationError}</p>}
+             <div className="library-list">
+               {locations.map((location) => {
+                 const isMapped = elements.some((element) => element.type === 'area' && element.locationId === location.id)
+                 return <button key={location.id} className={isMapped ? 'library-location is-mapped' : 'library-location'} type="button" draggable onDragStart={(event) => { event.dataTransfer.setData('application/x-toolbox-location', location.id); event.dataTransfer.effectAllowed = 'copy' }} onClick={() => placeLocation(location)}><span className="library-grip" aria-hidden="true">::</span><span><strong>{location.name}</strong><small>{locationPath(location, locations)}</small></span>{isMapped && <b>Mapped</b>}</button>
+               })}
+               {!locationError && locations.length === 0 && <p className="library-empty">No storage containers yet. Draw a container to create one.</p>}
+             </div>
+           </section>}
+          </aside>
+        <div
+          className="sidebar-resize-handle"
+          role="separator"
+          tabIndex={0}
+          aria-label="Sidebar width"
+          aria-orientation="vertical"
+          aria-controls="designer-sidebar"
+          aria-valuemin={220}
+          aria-valuemax={440}
+          aria-valuenow={sidebarWidth}
+          aria-valuetext={`${sidebarWidth} pixels`}
+          title="Drag to resize sidebar, or use Left/Right arrows, Home and End"
+          onPointerDown={(event) => {
+            if (event.button !== 0 || sidebarDrag.current) return
+            event.preventDefault()
+            event.currentTarget.focus()
+            event.currentTarget.setPointerCapture(event.pointerId)
+            sidebarDrag.current = { pointerId: event.pointerId, x: event.clientX, width: sidebarWidth }
+          }}
+          onPointerMove={(event) => {
+            const drag = sidebarDrag.current
+            if (drag?.pointerId === event.pointerId) resizeSidebar(drag.width + event.clientX - drag.x)
+          }}
+          onPointerUp={endSidebarResize}
+          onPointerCancel={endSidebarResize}
+          onLostPointerCapture={() => { sidebarDrag.current = null }}
+          onKeyDown={(event) => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+            event.preventDefault()
+            event.stopPropagation()
+            resizeSidebar(event.key === 'Home' ? 220 : event.key === 'End' ? 440 : sidebarWidth + (event.key === 'ArrowRight' ? 10 : -10))
+          }}
+        />
 
-        <div className="designer-workspace">
-          <div className="canvas-toolbar">
-            <div><strong>{toolDetails.find((item) => item.tool === tool)?.label}</strong><span>{tool === 'select' ? 'Click an object to edit it' : 'Click and drag on the grid to draw'}</span></div>
-            <div className="canvas-controls">
-              <button className={snapEnabled ? 'snap-toggle is-active' : 'snap-toggle'} type="button" onClick={() => setSnapEnabled((enabled) => !enabled)}><span className="snap-icon" /> Snap {snapEnabled ? 'on' : 'off'}</button>
-              <span className="control-divider" />
-              <label className="measurement-select"><span>Units</span><select aria-label="Measurement unit" value={measurementSettings.unit} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, unit: event.target.value as MeasurementUnit }))}><option value="ft">Feet</option><option value="in">Inches</option><option value="m">Metres</option><option value="cm">Centimetres</option><option value="mm">Millimetres</option></select></label>
-              <label className="toolbar-scale"><span>Per square</span><input aria-label="Scale per grid square" type="number" min="0.01" step="0.1" value={measurementSettings.perGrid} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, perGrid: Math.max(.01, Number(event.target.value)) }))} /></label>
-              <label className="toolbar-grid-size"><span>Grid</span><input aria-label="Grid size" type="number" min="5" max="100" step="5" value={measurementSettings.gridSize} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, gridSize: Math.min(100, Math.max(5, Number(event.target.value))) }))} /><small>canvas units</small></label>
-              <label className="toolbar-design-size"><span>Max</span><input aria-label="Maximum design width" type="number" min="1" step="0.5" value={measurementSettings.maxWidth} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, maxWidth: Math.max(1, Number(event.target.value)) }))} /><span>&times;</span><input aria-label="Maximum design height" type="number" min="1" step="0.5" value={measurementSettings.maxHeight} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, maxHeight: Math.max(1, Number(event.target.value)) }))} /><small>{measurementSettings.unit}</small></label>
-              <button type="button" onClick={() => setZoom((value) => Math.max(.5, value - .1))} aria-label="Zoom out">&minus;</button>
-              <span className="zoom-value">{Math.round(zoom * 100)}%</span>
-              <button type="button" onClick={() => setZoom((value) => Math.min(1.5, value + .1))} aria-label="Zoom in">+</button>
-            </div>
-          </div>
-          <div className={`plan-viewport tool-${tool}`} onDragOver={(event) => event.preventDefault()} onDrop={dropLocation}>
+         <div className="designer-workspace">
+           <div className={`plan-viewport tool-${tool}`} onDragOver={(event) => event.preventDefault()} onDrop={dropLocation}>
             <svg
               ref={svgRef}
               className="plan-canvas"
@@ -522,43 +601,24 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
             >
               <defs>
                 <pattern id="small-grid" width={measurementSettings.gridSize} height={measurementSettings.gridSize} patternUnits="userSpaceOnUse"><path d={`M ${measurementSettings.gridSize} 0 L 0 0 0 ${measurementSettings.gridSize}`} /></pattern>
-                <pattern id="large-grid" width={measurementSettings.gridSize * 5} height={measurementSettings.gridSize * 5} patternUnits="userSpaceOnUse"><rect width={measurementSettings.gridSize * 5} height={measurementSettings.gridSize * 5} fill="url(#small-grid)" /><path d={`M ${measurementSettings.gridSize * 5} 0 L 0 0 0 ${measurementSettings.gridSize * 5}`} /></pattern>
+                <pattern id="large-grid" width={measurementSettings.gridSize * 5} height={measurementSettings.gridSize * 5} patternUnits="userSpaceOnUse"><rect width={measurementSettings.gridSize * 5} height={measurementSettings.gridSize * 5} className="grid-paper" /><rect width={measurementSettings.gridSize * 5} height={measurementSettings.gridSize * 5} fill="url(#small-grid)" /><path d={`M ${measurementSettings.gridSize * 5} 0 L 0 0 0 ${measurementSettings.gridSize * 5}`} /></pattern>
               </defs>
               <rect className="plan-grid-background" width={canvasWidth} height={canvasHeight} fill="url(#large-grid)" />
               {elements.map(renderElement)}
             </svg>
           </div>
-          <div className="canvas-statusbar"><span><b>{elements.filter((item) => item.type === 'wall').length}</b> walls</span><span><b>{elements.filter((item) => item.type === 'area').length}</b> objects</span><span><b>{elements.filter((item) => item.type === 'door' || item.type === 'garageDoor' || item.type === 'window').length}</b> openings</span><span className="canvas-scale">1 grid square = {measurementSettings.perGrid} {measurementSettings.unit} / {measurementSettings.gridSize} canvas units</span></div>
+          <div className="canvas-statusbar"><span><b>{elements.filter((item) => item.type === 'wall').length}</b> walls</span><span><b>{elements.filter((item) => item.type === 'area').length}</b> objects</span><span><b>{elements.filter((item) => item.type === 'door' || item.type === 'garageDoor' || item.type === 'window').length}</b> openings</span><span className="canvas-scale">1 grid square = {measurementSettings.perGrid} {measurementSettings.unit}</span></div>
         </div>
 
-        <aside className="designer-inspector" aria-label="Properties and locations">
-          <section className="location-library" aria-labelledby="location-library-title">
-            <div className="library-heading"><div><p className="kicker">Location library</p><h2 id="location-library-title">Your places</h2></div></div>
-            <p className="library-help">Drag a location onto the plan, or click to place it.</p>
-            {locationError && !pendingArea && <p className="library-error" role="alert">{locationError}</p>}
-            <div className="library-list">
-              {locations.map((location) => {
-                const isMapped = elements.some((element) => element.type === 'area' && element.locationId === location.id)
-                return <button
-                  key={location.id}
-                  className={isMapped ? 'library-location is-mapped' : 'library-location'}
-                  type="button"
-                  draggable
-                  onDragStart={(event) => {
-                    event.dataTransfer.setData('application/x-toolbox-location', location.id)
-                    event.dataTransfer.effectAllowed = 'copy'
-                  }}
-                  onClick={() => placeLocation(location)}
-                ><span className="library-grip" aria-hidden="true">::</span><span><strong>{location.name}</strong><small>{locationPath(location, locations)}</small></span>{isMapped && <b>Mapped</b>}</button>
-              })}
-              {!locationError && locations.length === 0 && <p className="library-empty">No locations yet. Draw a rectangle to create one.</p>}
-            </div>
-          </section>
-          <div className="inspector-heading"><p className="kicker">Inspector</p><h2>Properties</h2></div>
-          {!selected && <div className="inspector-empty"><span className="inspector-empty-icon">+</span><strong>Nothing selected</strong><p>Select an object on the plan to adjust its size and position.</p></div>}
+          <aside className="designer-inspector" aria-label="Properties">
+            {!selected && <div className="inspector-empty">
+              <div className="inspector-context"><strong>{toolDetails.find((item) => item.tool === tool)?.label}</strong><span>{tool === 'select' ? 'Click an object to edit it' : 'Click and drag on the grid to draw'}</span></div>
+              <span className="inspector-empty-icon">+</span><strong>Nothing selected</strong><p>Select an object on the plan to adjust its size and position.</p>
+              {renderCanvasControls()}
+            </div>}
           {selected && <div className="inspector-content">
             <div className="selection-type"><span className={`selection-swatch selection-swatch--${selected.type}`} /><div><small>Selected</small><strong>{selected.type === 'area' ? selected.label : selected.type}</strong></div></div>
-            {selected.type === 'area' && <label className="inspector-field"><span>Label</span><input value={selected.label} onChange={(event) => updateSelected({ label: event.target.value })} /></label>}
+             {selected.type === 'area' && <label className="inspector-field"><span>Label</span><input ref={storageLabelRef} value={selected.label} onChange={(event) => updateSelected({ label: event.target.value })} /></label>}
             {selected.type === 'area' ? <>
               <div className="inspector-field-row">
                 <label className="inspector-field"><span>Width <small>{measurementSettings.unit}</small></span><input aria-label="Width" type="number" min={measurementSettings.perGrid} step={measurementSettings.perGrid} value={selected.width / measurementSettings.gridSize * measurementSettings.perGrid} onChange={(event) => updateSelected({ width: Math.max(measurementSettings.gridSize, Number(event.target.value) / measurementSettings.perGrid * measurementSettings.gridSize) })} /></label>
@@ -569,21 +629,25 @@ export function SpaceDesignerPage({ onNavigate }: SpaceDesignerPageProps) {
                 <label className="inspector-field"><span>Y position</span><input type="number" step={measurementSettings.gridSize} value={selected.y} onChange={(event) => updateSelected({ y: Number(event.target.value) })} /></label>
               </div>
             </> : <div className="measurement-card"><span>Length</span><strong>{formatMeasurement(lineLength(selected), measurementSettings).split(' ')[0]}</strong><small>{measurementSettings.unit}</small></div>}
-            <div className="inspector-tip"><strong>Quick edit</strong><span>Drag the {selected.type === 'area' ? 'corner handles to resize' : 'end handles to reshape'}. Drag the object itself to move it.</span></div>
-            <button className="delete-element" type="button" onClick={removeSelected}>Delete {selected.type}</button>
+              {selected.type === 'area' ? <div className="container-actions">
+                <button className="edit-element" type="button" onClick={() => storageLabelRef.current?.focus()}>Edit container</button>
+                <button className="remove-element" type="button" onClick={removeSelected}>Remove from floor plan</button>
+                <button className="delete-element" type="button" onClick={() => void removeSelectedContainer()} disabled={deletingLocation}>{deletingLocation ? 'Deleting container...' : 'Delete container'}</button>
+                {locationError && <p className="inspector-error" role="alert">{locationError}</p>}
+              </div> : <button className="delete-element" type="button" onClick={removeSelected}>Delete {selected.type}</button>}
           </div>}
         </aside>
       </section>
       {pendingArea && <div className="designer-dialog-backdrop" role="presentation">
         <form className="designer-dialog" onSubmit={confirmNewLocation} role="dialog" aria-modal="true" aria-labelledby="new-space-title">
           <div className="dialog-mark" aria-hidden="true" />
-          <p className="kicker">New rectangle</p>
+           <p className="kicker">New container</p>
           <h2 id="new-space-title">Name this space</h2>
-          <p className="dialog-copy">This will also add a new location to your inventory.</p>
+          <p className="dialog-copy">This will also add a new storage container to your inventory.</p>
           <label className="inspector-field"><span>Name</span><input autoFocus required maxLength={200} value={newLocationName} onChange={(event) => setNewLocationName(event.target.value)} placeholder="e.g. Utility room" /></label>
-          <label className="inspector-field"><span>Parent location <small>Optional</small></span><select value={newLocationParentId ?? ''} onChange={(event) => setNewLocationParentId(event.target.value || null)}><option value="">Top-level location</option>{locations.map((location) => <option key={location.id} value={location.id}>{locationPath(location, locations)}</option>)}</select></label>
+          <label className="inspector-field"><span>Parent container <small>Optional</small></span><select value={newLocationParentId ?? ''} onChange={(event) => setNewLocationParentId(event.target.value || null)}><option value="">Top-level container</option>{locations.map((location) => <option key={location.id} value={location.id}>{locationPath(location, locations)}</option>)}</select></label>
           {locationError && <p className="dialog-error" role="alert">{locationError}</p>}
-          <div className="dialog-actions"><button className="secondary-button" type="button" onClick={cancelNewLocation} disabled={creatingLocation}>Cancel</button><button className="primary-button" type="submit" disabled={creatingLocation}>{creatingLocation ? 'Creating...' : 'Create location'} <span aria-hidden="true">-&gt;</span></button></div>
+          <div className="dialog-actions"><button className="secondary-button" type="button" onClick={cancelNewLocation} disabled={creatingLocation}>Cancel</button><button className="primary-button" type="submit" disabled={creatingLocation}>{creatingLocation ? 'Creating...' : 'Create container'} <span aria-hidden="true">-&gt;</span></button></div>
         </form>
       </div>}
     </main>

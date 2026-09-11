@@ -47,21 +47,31 @@ public sealed class LocationServiceTests
         var root = await service.CreateAsync(new CreateLocationCommand("House", null, null, "Building"), CancellationToken.None);
         var child = await service.CreateAsync(new CreateLocationCommand("Garage", null, root.Id, "Room"), CancellationToken.None);
 
-        await Assert.ThrowsAsync<LocationConflictException>(() => service.UpdateAsync(
+        var error = await Assert.ThrowsAsync<LocationConflictException>(() => service.UpdateAsync(
             root.Id,
             new UpdateLocationCommand("House", null, child.Id, "Building"),
             CancellationToken.None));
+        Assert.Equal("A storage container cannot be moved under itself or one of its descendants.", error.Message);
     }
 
     [Fact]
-    public async Task DeleteRejectsLocationsWithChildren()
+    public async Task DeleteRemovesChildrenAndMovesTheirItemsToUnorganised()
     {
         var repository = new FakeLocationRepository();
         var service = new LocationService(repository);
         var root = await service.CreateAsync(new CreateLocationCommand("House", null, null, "Building"), CancellationToken.None);
-        await service.CreateAsync(new CreateLocationCommand("Garage", null, root.Id, "Room"), CancellationToken.None);
+        var child = await service.CreateAsync(new CreateLocationCommand("Garage", null, root.Id, "Room"), CancellationToken.None);
+        var unorganised = Location.Create("Unorganised", id: Location.UnorganisedId, locationType: "System");
+        var childEntity = repository.Locations.Single(location => location.Id == child.Id);
+        var item = Item.Create("Hammer", child.Id);
+        childEntity.Items.Add(item);
+        await repository.AddAsync(unorganised, CancellationToken.None);
 
-        await Assert.ThrowsAsync<LocationConflictException>(() => service.DeleteAsync(root.Id, CancellationToken.None));
+        await service.DeleteAsync(root.Id, CancellationToken.None);
+
+        Assert.Equal(Location.UnorganisedId, item.LocationId);
+        Assert.DoesNotContain(repository.Locations, location => location.Id == root.Id);
+        Assert.DoesNotContain(repository.Locations, location => location.Id == child.Id);
     }
 
     [Fact]

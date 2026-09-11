@@ -1,6 +1,6 @@
 # Toolbox — Initial Setup Agent Brief
 
-You are beginning development of **Toolbox**, a self-hosted inventory, storage-location and item checkout application.
+You are beginning development of **Toolbox**, a self-hosted inventory, storage and item checkout application.
 
 Your job in this first pass is to **create the repository, establish a sensible architecture, scaffold the application, design the core data model, and implement the first useful vertical slice**.
 
@@ -14,7 +14,12 @@ Toolbox answers:
 
 > **Where did I put that?**
 
-It should allow a household, garage, workshop, shed or storage space to be modelled as hierarchical locations.
+It should allow a household, garage, workshop, shed or storage space to be modelled as hierarchical storage containers.
+
+Use **Storage** for UI sections, **storage container** for individual entities,
+and **Container** in compact controls. The designer's collection is the
+**Storage library**. Internal `Location` identifiers and API/data contracts keep
+their existing names.
 
 Example:
 
@@ -30,13 +35,11 @@ Users should eventually be able to:
 
 * catalogue items
 * search for items
-* organise items into nested physical locations
+* organise items into nested storage containers
 * add photos
-* create QR codes for locations
-* scan a QR code to view a location
 * check tools/items in and out
 * draw simple maps/layouts
-* place storage locations onto those maps
+* place storage containers onto those maps
 * search for an item and visually show where it is
 
 The eventual map feature is important, but **do not build a full map editor in this first pass**.
@@ -49,14 +52,13 @@ Produce a working application where:
 
 1. The backend runs.
 2. The frontend runs.
-3. Locations can be created.
-4. Locations can be nested.
-5. Items can be created and assigned to locations.
+3. Storage containers can be created.
+4. Storage containers can be nested.
+5. Items can be created and assigned to storage containers.
 6. Items can be searched.
 7. An item's full storage path is displayed.
 8. Items can be checked out and returned.
-9. A QR code can be generated for a location.
-10. Everything runs through Docker Compose.
+9. Everything runs through Docker Compose.
 
 The initial product should already be useful without the map editor.
 
@@ -119,9 +121,9 @@ This should initially be a straightforward modular monolith.
 
 Design this carefully before building the UI.
 
-## Location
+## Storage Container (`Location`)
 
-Represents a physical storage location.
+Represents a physical storage container.
 
 Examples:
 
@@ -146,10 +148,10 @@ CreatedAt
 UpdatedAt
 ```
 
-A location can have:
+A storage container can have:
 
 * zero or one parent
-* many child locations
+* many child containers
 * many items
 
 The system should support arbitrary nesting.
@@ -187,7 +189,7 @@ Keep the first version simple.
 
 ## Checkout
 
-Represents an item leaving its normal storage location.
+Represents an item leaving its normal storage container.
 
 Suggested fields:
 
@@ -206,11 +208,11 @@ A simple borrower/name field is sufficient initially.
 
 ---
 
-# Location Hierarchy
+# Storage Hierarchy
 
 The hierarchy is one of the important engineering features.
 
-Implement the ability to calculate/display a complete location path.
+Implement the ability to calculate/display a complete storage path.
 
 Example:
 
@@ -228,7 +230,7 @@ Avoid designing the system around a fixed number of levels.
 
 Create REST endpoints covering at least:
 
-## Locations
+## Storage
 
 ```text
 GET    /api/locations
@@ -273,17 +275,13 @@ Provide clean commands/endpoints for:
 
 Avoid turning checkout into generic CRUD if explicit actions communicate intent better.
 
-## QR
-
-Provide a way to retrieve/generate a QR code that links to a location.
-
 ---
 
 # Initial Frontend
 
 Build a clean responsive UI.
 
-Mobile usability matters because QR scanning and workshop usage will likely happen from a phone.
+Mobile usability matters because workshop usage will likely happen from a phone.
 
 ## Dashboard
 
@@ -292,16 +290,16 @@ Simple overview:
 ```text
 Toolbox
 
-Items        184
-Locations     32
-Checked out    3
+Items          184
+Containers      32
+Checked out      3
 
 [ Search everything... ]
 ```
 
-## Location browser
+## Storage browser
 
-Display hierarchical locations.
+Display hierarchical storage containers.
 
 Example:
 
@@ -338,8 +336,8 @@ Display:
 * name
 * description
 * quantity
-* current storage location
-* full location path
+* current storage container
+* full storage path
 * checkout state
 
 Actions:
@@ -349,15 +347,14 @@ Actions:
 * check out
 * return
 
-## Location page
+## Storage container page
 
 Display:
 
-* location details
+* storage container details
 * parent
-* child locations
+* child containers
 * contained items
-* QR code
 
 ---
 
@@ -399,26 +396,6 @@ Do not delete history after return.
 
 ---
 
-# QR Codes
-
-Every location should have a stable URL.
-
-Example:
-
-```text
-/locations/{id}
-```
-
-Generate a QR code pointing to this URL.
-
-A printed QR sticker on a storage box should therefore open the box contents immediately.
-
-For the first implementation:
-
-* displaying/downloading the QR code is enough
-* do not build printable QR sheet generation yet
-* do not build barcode scanning yet
-
 ---
 
 # Map Drawing — Design Now, Implement Later
@@ -435,7 +412,7 @@ Eventually users should be able to draw simplified layouts representing:
 * tool cabinet
 * loft
 
-Locations can then be placed on the layout.
+Storage containers can then be placed on the layout.
 
 Example:
 
@@ -527,10 +504,10 @@ Add meaningful backend tests.
 
 At minimum test:
 
-* create top-level location
-* create nested location
-* calculate full location path
-* move an item between locations
+* create top-level storage container
+* create nested storage container
+* calculate full storage path
+* move an item between storage containers
 * search items
 * check item out
 * prevent invalid duplicate active checkout if appropriate
@@ -594,7 +571,6 @@ Include:
 * architecture
 * data model overview
 * roadmap
-* QR workflow
 * checkout workflow
 * planned map system
 * contributing notes
@@ -621,7 +597,7 @@ Prioritise:
 1. Search.
 2. Quickly adding an item.
 3. Quickly moving an item.
-4. Quickly browsing a location.
+4. Quickly browsing a storage container.
 5. Mobile-friendly interaction.
 
 Do not bury search behind multiple screens.
@@ -660,15 +636,14 @@ Stop once:
 * frontend builds/runs
 * PostgreSQL is configured
 * EF migrations work
-* nested locations work
-* items can be added to locations
+* nested storage containers work
+* items can be added to storage containers
 * items can be moved
 * item search works
-* full location path is shown
+* full storage path is shown
 * checkout works
 * return works
 * history is retained
-* location QR codes work
 * application runs through Docker Compose
 * tests cover key domain behaviour
 * README documents the project

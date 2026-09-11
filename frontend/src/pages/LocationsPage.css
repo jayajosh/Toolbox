@@ -1,0 +1,396 @@
+.location-page .location-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+  gap: 28px;
+}
+
+.location-index {
+  border: 1px solid #bcc3ba;
+  background: #f4f2eb;
+}
+.toast {
+  position: fixed;
+  right: 50%;
+  bottom: 28px;
+  z-index: 120;
+  max-width: min(520px, calc(100vw - 40px));
+  padding: 14px 18px;
+  border: 1px solid #9eafa0;
+  background: #25352f;
+  box-shadow: 4px 5px 0 #bcc5bb;
+  color: #f5f3ec;
+  text-align: center;
+  transform: translateX(50%);
+}
+.location-list {
+  display: flex;
+  flex-direction: column;
+}
+.location-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 20px;
+  border-bottom: 1px solid #dce0d8;
+}
+.location-expand {
+  display: grid;
+  flex: 0 0 26px;
+  place-items: center;
+  aspect-ratio: 1;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #b7c0b7;
+  border-radius: 2px;
+  background: #f8f6ef;
+  color: #5d7064;
+  font-size: 15px;
+  line-height: 1;
+  text-align: center;
+}
+.location-expand:hover:not(:disabled) {
+  border-color: #d36b3c;
+  background: #fff9f1;
+  color: #a94f2b;
+}
+.location-expand:disabled {
+  cursor: default;
+  border-color: transparent;
+  background: transparent;
+  color: transparent;
+}
+.location-expand-placeholder {
+  border-color: transparent;
+  background: transparent;
+  color: #8a938b;
+  font-weight: 700;
+  pointer-events: none;
+}
+.location-row div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.location-row strong {
+  overflow: hidden;
+  color: #25352f;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.location-row small {
+  margin-top: 3px;
+  color: #8a938b;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.location-glyph {
+  flex: 0 0 11px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid #d36b3c;
+  transform: rotate(45deg);
+}
+.location-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.location-delete {
+  padding: 5px 0 5px 10px;
+  background: none;
+  color: #a94f2b;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.location-delete:disabled {
+  cursor: not-allowed;
+  color: #adb4ad;
+}
+.location-action,
+.location-delete {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #aeb8ae;
+  border-radius: 2px;
+  background: #f8f6ef;
+  color: #526158;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.location-action:hover {
+  border-color: #6f9473;
+  background: #e7eee4;
+  color: #405047;
+}
+.location-delete {
+  border-color: #c68469;
+  color: #a94f2b;
+}
+.location-delete:hover:not(:disabled) {
+  background: #f4d4c1;
+}
+.location-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 32px 22px;
+  color: #7d887f;
+  font-size: 12px;
+}
+.location-empty strong {
+  color: #25352f;
+  font-size: 18px;
+  font-weight: 400;
+}
+.unorganised-row {
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid #dce0d8;
+  background: transparent;
+}
+.unorganised-row:hover {
+  background: transparent;
+}
+.unorganised-row > div {
+  flex: 1;
+}
+.unorganised-row .location-row-actions {
+  min-width: 0;
+}
+.location-glyph--system {
+  background: #728a77;
+}
+.color-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+}
+
+.location-page .name-with-colour {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.location-page .name-with-colour > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.name-with-colour .color-picker {
+  min-height: 45px;
+}
+.name-with-colour .color-picker-button {
+  width: 45px;
+  height: 45px;
+}
+.color-picker-button {
+  width: 52px;
+  height: 52px;
+  border: 2px solid #b7c1b8;
+  cursor: pointer;
+}
+.color-picker-button:hover {
+  border-color: #25352f;
+  box-shadow:
+    0 0 0 2px #f4f2eb,
+    0 0 0 3px #25352f;
+}
+.color-picker-menu {
+  position: absolute;
+  top: 60px;
+  left: 0;
+  z-index: 15;
+  display: flex;
+  min-width: 224px;
+  padding: 12px;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid #b6c1b7;
+  background: #fbfaf5;
+  box-shadow: 4px 5px 0 #d5d6ca;
+}
+.color-swatches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.color-swatch,
+.color-custom {
+  display: block;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.color-swatch:hover,
+.color-swatch.is-selected {
+  border-color: #25352f;
+  box-shadow:
+    0 0 0 2px #f4f2eb,
+    0 0 0 3px #25352f;
+}
+.color-custom-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #c5ccc3;
+  background: #e8ebe4;
+  color: #69756d;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+.color-custom-control > span {
+  color: #7c877e;
+  font-size: 18px;
+  line-height: 1;
+}
+.color-custom-control:hover {
+  border-color: #87998e;
+  background: #e0e6dd;
+}
+.color-input {
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.copy-parent-color {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #aeb8ae;
+  background: #f8f6ef;
+  color: #526158;
+  font-size: 12px;
+  font-weight: 700;
+}
+.copy-parent-color:hover {
+  border-color: #6f9473;
+  background: #e7eee4;
+}
+.location-rename {
+  min-height: 36px;
+  padding: 0 12px;
+  background: #526158;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.location-page .location-list {
+  max-height: 560px;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .location-page .location-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .toast {
+    right: 20px;
+    bottom: 20px;
+    left: 20px;
+    max-width: none;
+    transform: none;
+  }
+  .unorganised-row {
+    align-items: start;
+    flex-wrap: wrap;
+  }
+  .unorganised-row .location-row-actions {
+    width: auto;
+    min-width: 0;
+    margin-left: auto;
+  }
+}
+
+:root[data-theme="night"] .location-row strong,
+:root[data-theme="night"] .location-empty strong {
+  color: var(--night-text);
+}
+:root[data-theme="night"] .location-row small,
+:root[data-theme="night"] .location-empty {
+  color: var(--night-muted);
+}
+:root[data-theme="night"] .location-index {
+  border-color: var(--night-border);
+  background: var(--night-surface-1);
+}
+:root[data-theme="night"] .location-row,
+:root[data-theme="night"] .unorganised-row {
+  border-color: var(--night-border);
+}
+:root[data-theme="night"] .location-action,
+:root[data-theme="night"] .location-delete,
+:root[data-theme="night"] .copy-parent-color {
+  border-color: var(--night-border-strong);
+  background: var(--night-surface-2);
+  color: var(--night-text);
+}
+:root[data-theme="night"] .location-action:hover,
+:root[data-theme="night"] .copy-parent-color:hover {
+  border-color: var(--night-accent);
+  background: var(--night-warm);
+  color: var(--night-accent-light);
+}
+:root[data-theme="night"] .location-delete {
+  border-color: #9b573e;
+  color: var(--night-accent-light);
+}
+:root[data-theme="night"] .location-delete:hover:not(:disabled) {
+  background: var(--night-warm);
+}
+:root[data-theme="night"] .color-picker-menu {
+  border-color: var(--night-border-strong);
+  background: var(--night-surface-1);
+  box-shadow: 5px 6px 0 var(--night-shadow);
+}
+:root[data-theme="night"] .color-custom-control {
+  border-color: var(--night-border-strong);
+  background: var(--night-surface-2);
+  color: var(--night-muted);
+}
+:root[data-theme="night"] .location-expand {
+  border-color: var(--night-border-strong);
+  background: var(--night-surface-2);
+  color: var(--night-text);
+}
+:root[data-theme="night"] .location-expand:hover:not(:disabled) {
+  border-color: var(--night-accent);
+  background: var(--night-warm);
+  color: var(--night-accent-light);
+}
+:root[data-theme="night"] .location-expand:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: transparent;
+}
+:root[data-theme="night"] .location-expand-placeholder {
+  border-color: transparent;
+  background: transparent;
+  color: var(--night-faint);
+}
+:root[data-theme="night"] .color-picker-button,
+:root[data-theme="night"] .color-swatch,
+:root[data-theme="night"] .color-custom {
+  border-color: var(--night-border-strong);
+}
+:root[data-theme="night"] .location-rename {
+  background: var(--night-accent);
+  color: #fff8f3;
+}

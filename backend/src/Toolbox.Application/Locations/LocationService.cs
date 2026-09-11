@@ -83,7 +83,7 @@ public sealed class LocationService(ILocationRepository repository)
                 || command.IsInternalComponent
                 || !string.Equals(command.LocationType, "System", StringComparison.Ordinal))
             {
-                throw new LocationConflictException("The system fallback location cannot be moved or change type.");
+                throw new LocationConflictException("The system fallback storage container cannot be moved or change type.");
             }
 
             location.Rename(command.Name);
@@ -123,27 +123,68 @@ public sealed class LocationService(ILocationRepository repository)
 
         if (location.IsSystem)
         {
-            throw new LocationConflictException("The system fallback location cannot be deleted.");
+            throw new LocationConflictException("The system fallback storage container cannot be deleted.");
         }
 
-        if (location.Children.Count > 0)
+        var allLocations = await repository.ListAsync(cancellationToken);
+        var descendantIds = GetDescendantIds(id, allLocations);
+        var branch = new List<Location> { location };
+        foreach (var descendantId in descendantIds)
         {
-            throw new LocationConflictException("A location with child locations cannot be deleted.");
+            if (await repository.GetAsync(descendantId, includeContents: true, cancellationToken) is { } descendant)
+            {
+                branch.Add(descendant);
+            }
         }
 
-        if (location.Items.Count > 0
+        if (branch.Any(candidate => candidate.Items.Count > 0)
             && await repository.GetAsync(Location.UnorganisedId, includeContents: false, cancellationToken) is null)
         {
-            throw new LocationConflictException("The system fallback location is unavailable.");
+            throw new LocationConflictException("The system fallback storage container is unavailable.");
         }
 
-        foreach (var item in location.Items)
+        foreach (var item in branch.SelectMany(candidate => candidate.Items))
         {
             item.MoveTo(Location.UnorganisedId);
         }
 
-        repository.Remove(location);
+        foreach (var candidate in branch.OrderByDescending(candidate => GetDepth(candidate.Id, allLocations)))
+        {
+            repository.Remove(candidate);
+        }
         await repository.SaveChangesAsync(cancellationToken);
+    }
+
+    private static IReadOnlyList<Guid> GetDescendantIds(Guid locationId, IReadOnlyList<Location> locations)
+    {
+        var childrenByParent = locations
+            .Where(location => location.ParentLocationId is not null)
+            .GroupBy(location => location.ParentLocationId!.Value)
+            .ToDictionary(group => group.Key, group => group.Select(location => location.Id).ToArray());
+        var descendants = new List<Guid>();
+        var pending = new Stack<Guid>(childrenByParent.GetValueOrDefault(locationId) ?? []);
+        while (pending.TryPop(out var childId))
+        {
+            descendants.Add(childId);
+            foreach (var grandchildId in childrenByParent.GetValueOrDefault(childId) ?? [])
+            {
+                pending.Push(grandchildId);
+            }
+        }
+        return descendants;
+    }
+
+    private static int GetDepth(Guid locationId, IReadOnlyList<Location> locations)
+    {
+        var byId = locations.ToDictionary(location => location.Id);
+        var depth = 0;
+        var currentId = locationId;
+        while (byId.TryGetValue(currentId, out var current) && current.ParentLocationId is { } parentId)
+        {
+            depth++;
+            currentId = parentId;
+        }
+        return depth;
     }
 
     private static LocationDetails ToDetails(Location location) =>
@@ -193,7 +234,7 @@ public sealed class LocationService(ILocationRepository repository)
         {
             if (value == locationId)
             {
-                throw new LocationConflictException("A location cannot be moved under itself or one of its descendants.");
+                throw new LocationConflictException("A storage container cannot be moved under itself or one of its descendants.");
             }
 
             if (!visited.Add(value) || !byId.TryGetValue(value, out var current))
