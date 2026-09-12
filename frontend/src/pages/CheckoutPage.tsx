@@ -2,6 +2,8 @@ import { useDeferredValue, useEffect, useRef, useState } from 'react'
 import './CheckoutPage.css'
 import { checkinItem, checkoutItem, getItemFeatures, listItems, listLocations } from '../api'
 import { ItemTable } from '../components/ItemTable'
+import { PageHeading } from '../components/PageHeading'
+import { notifyInventoryChanged } from '../inventoryEvents'
 import { isLocationWithin, locationPath } from '../locationHierarchy'
 import type { Item, Location } from '../types'
 
@@ -14,6 +16,9 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null)
+  const [selectedFamilyId, setSelectedFamilyId] = useState<string | null>(null)
+  const [selectedTagId, setSelectedTagId] = useState<string | null>(null)
+  const [selectedBorrower, setSelectedBorrower] = useState('')
   const deferredSearch = useDeferredValue(search)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -41,13 +46,22 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
 
   const query = deferredSearch.trim().toLowerCase()
   const visibleItems = items.filter((item) => (!selectedLocationId || isLocationWithin(item.locationId, selectedLocationId, locations))
+    && (!selectedFamilyId || item.family?.id === selectedFamilyId)
+    && (!selectedTagId || item.tags.some((tag) => tag.id === selectedTagId))
     && [item.name, item.family?.name ?? '', ...item.tags.map((tag) => tag.name)].some((value) => value.toLowerCase().includes(query)))
   const available = visibleItems.filter((item) => !item.isCheckedOut)
-  const checkedOut = visibleItems.filter((item) => item.isCheckedOut)
+  const checkedOut = visibleItems.filter((item) => item.isCheckedOut && (!selectedBorrower || item.activeCheckout?.borrowerName === selectedBorrower))
   const selectedAvailable = available.filter((item) => selectedIds.has(item.id))
   const locationOptions = locations
     .map((location) => ({ location, path: locationPath(location, locations) }))
     .sort((a, b) => a.path.localeCompare(b.path))
+  const familyById = new Map<string, NonNullable<Item['family']>>()
+  items.forEach((item) => { if (item.family) familyById.set(item.family.id, item.family) })
+  const familyOptions = [...familyById.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const tagById = new Map<string, Item['tags'][number]>()
+  items.flatMap((item) => item.tags).forEach((tag) => tagById.set(tag.id, tag))
+  const tagOptions = [...tagById.values()].sort((a, b) => a.name.localeCompare(b.name))
+  const borrowerOptions = [...new Set(items.filter((item) => item.isCheckedOut && item.activeCheckout).map((item) => item.activeCheckout!.borrowerName))].sort((a, b) => a.localeCompare(b))
 
   function toggleItem(id: string) {
     setSelectedIds((current) => {
@@ -93,6 +107,7 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
     })
     setItems((current) => current.map((item) => updated.get(item.id) ?? item))
     setSelectedIds((current) => new Set([...current].filter((id) => !updated.has(id))))
+    if (updated.size > 0) notifyInventoryChanged()
     if (failures.length) setError(`${failures.length} of ${selected.length} items could not be checked ${returning ? 'in' : 'out'}. ${failures.join(' ')}`)
     else {
       dialog.current?.close()
@@ -105,25 +120,21 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
 
   return (
     <main className="app-main">
-       <section className="checkout-heading">
-         <p className="kicker">Item availability</p>
-       </section>
+       <PageHeading kicker="Check In/Out" actions={!loading && !loadError && enabled ? <div className="checkout-filters collection-controls">
+           <select aria-label="Filter by container" id="checkout-location-filter" value={selectedLocationId ?? ''} disabled={busy} onChange={(event) => { setSelectedLocationId(event.target.value || null); setSelectedIds(new Set()) }}><option value="">All containers</option>{locationOptions.map(({ location, path }) => <option key={location.id} value={location.id}>{path}</option>)}</select>
+            <select aria-label="Filter by family" id="checkout-family-filter" value={selectedFamilyId ?? ''} disabled={busy} onChange={(event) => { setSelectedFamilyId(event.target.value || null); setSelectedIds(new Set()) }}><option value="">All families</option>{familyOptions.map((family) => <option key={family.id} value={family.id}>{family.name}</option>)}</select>
+            <select aria-label="Filter by tag" id="checkout-tag-filter" value={selectedTagId ?? ''} disabled={busy} onChange={(event) => { setSelectedTagId(event.target.value || null); setSelectedIds(new Set()) }}><option value="">All tags</option>{tagOptions.map((tag) => <option key={tag.id} value={tag.id}>{tag.name}</option>)}</select>
+           <select aria-label="Filter by borrower" id="checkout-borrower-filter" value={selectedBorrower} disabled={busy || borrowerOptions.length === 0} onChange={(event) => { setSelectedBorrower(event.target.value); setSelectedIds(new Set()) }}><option value="">All borrowers</option>{borrowerOptions.map((borrower) => <option key={borrower} value={borrower}>{borrower}</option>)}</select>
+         </div> : undefined} />
       {loading && <p className="state-message">Loading your items...</p>}
       {loadError && <p className="state-message state-message--error" role="alert">{loadError}</p>}
       {!loading && !loadError && !enabled && <p className="state-message">Check out is disabled for this toolbox.</p>}
       {!loading && !loadError && enabled && <>
-         <section className="search-bar" aria-label="Checkout search">
-          <span className="search-icon" aria-hidden="true" />
-          <label className="sr-only" htmlFor="checkout-search">Search items</label>
-          <input id="checkout-search" type="search" placeholder="Search items, families, or tags..." value={search} disabled={busy} onChange={(event) => { setSearch(event.target.value); setSelectedIds(new Set()) }} />
-         </section>
-         <div className="checkout-filters collection-controls">
-           <label className="sr-only" htmlFor="checkout-location-filter">Filter by container</label>
-           <select id="checkout-location-filter" value={selectedLocationId ?? ''} disabled={busy} onChange={(event) => { setSelectedLocationId(event.target.value || null); setSelectedIds(new Set()) }}>
-             <option value="">All containers</option>
-             {locationOptions.map(({ location, path }) => <option key={location.id} value={location.id}>{path}</option>)}
-           </select>
-         </div>
+         <section className="search-bar page-search" aria-label="Checkout search">
+           <span className="search-icon" aria-hidden="true" />
+           <label className="sr-only" htmlFor="checkout-search">Search items</label>
+           <input id="checkout-search" type="search" placeholder="Search items, families, or tags..." value={search} disabled={busy} onChange={(event) => { setSearch(event.target.value); setSelectedIds(new Set()) }} />
+          </section>
         {error && <p className="state-message state-message--error" role="alert">{error}</p>}
         <div className="checkout-grid">
           {[false, true].map((returning) => {
@@ -132,8 +143,8 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
             const title = returning ? 'Checked out' : 'Currently in'
             return (
               <section className="inventory-card" aria-label={title} key={title}>
-                <div className="card-topline">
-                  <div><p className="kicker">{returning ? 'Away from the toolbox' : 'Ready to borrow'}</p><h2>{title}</h2></div>
+                <div className={`card-topline circulation-card-topline${returning ? ' circulation-card-topline--out' : ''}`}>
+                  <div><h2>{title}</h2></div>
                   <span className="result-count">{panelItems.length} records</span>
                 </div>
                 <div className="bulk-toolbar">

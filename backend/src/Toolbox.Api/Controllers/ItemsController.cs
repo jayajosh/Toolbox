@@ -101,6 +101,30 @@ public sealed class ItemsController(ItemService service, ItemFeatureOptions feat
         }
     }
 
+    [HttpPost("import")]
+    public async Task<ActionResult<IReadOnlyList<ImportedItem>>> Import(
+        ImportItemsRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var items = await service.ImportAsync(request.ToCommand(), cancellationToken);
+            return StatusCode(StatusCodes.Status201Created, items);
+        }
+        catch (LocationNotFoundException exception)
+        {
+            return NotFound(new { error = exception.Message });
+        }
+        catch (FamilyNotFoundException exception)
+        {
+            return NotFound(new { error = exception.Message });
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new { error = exception.Message });
+        }
+    }
+
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<ItemDetails>> Update(
         Guid id,
@@ -204,6 +228,14 @@ public sealed record QuickAddItemsRequest(
     public QuickAddItemsCommand ToCommand() =>
         new(NamePattern, StartNumber, EndNumber, LocationId, FamilyId, TagIds, IsConsumable, ConsumableStatus);
 }
+
+public sealed record ImportItemsRequest(Guid LocationId, IReadOnlyList<ImportItemRequest> Items)
+{
+    public ImportItemsCommand ToCommand() =>
+        new(LocationId, (Items ?? []).Select(item => new ImportItemCommand(item.Name, item.FamilyId)).ToArray());
+}
+
+public sealed record ImportItemRequest(string Name, Guid? FamilyId = null);
 
 public sealed record CheckoutItemRequest(string BorrowerName, string? Notes = null);
 public sealed record CheckinItemRequest(string? Notes = null);

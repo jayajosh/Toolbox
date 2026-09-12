@@ -1,8 +1,12 @@
-import { useDeferredValue, useEffect, useState } from 'react'
+import { useDeferredValue, useEffect, useEffectEvent, useState } from 'react'
+import Papa from 'papaparse'
 import './InventoryPage.css'
 import { checkoutItem, deleteItem, getItemFeatures, listFamilies, listItems, listLocations, listTags, updateItem } from '../api'
+import { ImportToolsDialog } from '../components/ImportToolsDialog'
 import { MapPanel } from '../components/MapPanel'
 import { ItemTable } from '../components/ItemTable'
+import { PageHeading } from '../components/PageHeading'
+import { INVENTORY_CHANGED_EVENT, isInventoryChangedStorageKey, notifyInventoryChanged } from '../inventoryEvents'
 import { isLocationWithin, locationPath } from '../locationHierarchy'
 import type { FamilySummary, Item, ItemInput, Location, Tag } from '../types'
 
@@ -56,8 +60,10 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const [bulkAction, setBulkAction] = useState<string | null>(null)
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [bulkModal, setBulkModal] = useState<BulkModal | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
   const [features, setFeatures] = useState({ checkout: true, checkoutHistory: true })
   const loading = loadedSearch !== deferredSearch
+  const [refreshVersion, setRefreshVersion] = useState(0)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -84,15 +90,36 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
         setLoadedSearch(deferredSearch)
       })
     return () => controller.abort()
-  }, [deferredSearch])
+  }, [deferredSearch, refreshVersion])
 
   useEffect(() => {
-    if (!bulkModal) return
+    const refresh = () => setRefreshVersion((current) => current + 1)
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    const refreshFromStorage = (event: StorageEvent) => {
+      if (isInventoryChangedStorageKey(event.key)) refresh()
+    }
+    window.addEventListener(INVENTORY_CHANGED_EVENT, refresh)
+    window.addEventListener('focus', refresh)
+    window.addEventListener('storage', refreshFromStorage)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      window.removeEventListener(INVENTORY_CHANGED_EVENT, refresh)
+      window.removeEventListener('focus', refresh)
+      window.removeEventListener('storage', refreshFromStorage)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!bulkModal && !importOpen) return
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !bulkAction) {
-        setBulkModal(null)
+        if (importOpen) setImportOpen(false)
+        else setBulkModal(null)
         setBulkError(null)
       }
     }
@@ -101,7 +128,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', closeOnEscape)
     }
-  }, [bulkAction, bulkModal])
+  }, [bulkAction, bulkModal, importOpen])
 
   const locationItems = selectedLocationId
     ? items.filter((item) => isLocationWithin(item.locationId, selectedLocationId, locations))
@@ -164,6 +191,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
     })
     setItems((current) => current.map((item) => updated.get(item.id) ?? item))
     setSelectedItemIds(new Set(failedIds))
+    if (updated.size > 0) notifyInventoryChanged()
     if (failedIds.length) setBulkError(`${failedIds.length} of ${selectedItems.length} items could not be updated.`)
     else setBulkModal(null)
     setBulkAction(null)
@@ -183,6 +211,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
     })
     setItems((current) => current.filter((item) => !deletedIds.has(item.id)))
     setSelectedItemIds(new Set(failedIds))
+    if (deletedIds.size > 0) notifyInventoryChanged()
     if (failedIds.length) setBulkError(`${failedIds.length} of ${selectedItems.length} items could not be deleted. Checked-out items must be returned first.`)
     else setBulkModal(null)
     setBulkAction(null)
@@ -203,27 +232,87 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
     })
     setItems((current) => current.map((item) => updated.get(item.id) ?? item))
     setSelectedItemIds(new Set(failedIds))
+    if (updated.size > 0) notifyInventoryChanged()
     if (failedIds.length) setBulkError(`${failedIds.length} item${failedIds.length === 1 ? '' : 's'} could not be checked out. Already checked-out items were skipped.`)
     else setBulkModal(null)
     setBulkAction(null)
   }
 
+  async function finishImport(itemIds: string[]) {
+    const [nextItems, nextLocations, nextFamilies] = await Promise.all([
+      listItems(''),
+      listLocations(),
+      listFamilies(),
+    ])
+    setItems(nextItems)
+    setLocations(nextLocations)
+    setFamilies(nextFamilies)
+    setSearch('')
+    setSelectedLocationId(null)
+    setSelectedFamilyId(null)
+    setSelectedTagId(null)
+    setSelectedItemIds(new Set(itemIds))
+    notifyInventoryChanged()
+    setImportOpen(false)
+    setBulkLocationId('')
+    setBulkModal('move')
+  }
+
+  async function exportTools() {
+    setError(null)
+    try {
+      const allItems = await listItems('')
+      const familyPaths = new Map(familyOptions.map(({ family, path }) => [family.id, path]))
+      const csv = Papa.unparse(allItems.map((item) => ({
+        name: item.name,
+        family: item.family ? familyPaths.get(item.family.id) ?? item.family.name : '',
+        storage: item.locationPath,
+        isConsumable: item.isConsumable,
+        consumableStatus: item.consumableStatus ?? '',
+      })))
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'toolbox-tools.csv'
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (reason: unknown) {
+      setError(reason instanceof Error ? reason.message : 'Could not export the tools.')
+    }
+  }
+
+  const handleExportRequest = useEffectEvent(() => void exportTools())
+
+  useEffect(() => {
+    const openImport = () => setImportOpen(true)
+    const exportCurrentTools = () => handleExportRequest()
+    window.addEventListener('toolbox:import-tools', openImport)
+    window.addEventListener('toolbox:export-tools', exportCurrentTools)
+    return () => {
+      window.removeEventListener('toolbox:import-tools', openImport)
+      window.removeEventListener('toolbox:export-tools', exportCurrentTools)
+    }
+  }, [])
+
   return (
     <main className="app-main">
-      <section className="search-bar" aria-label="Inventory search">
-        <span className="search-icon" aria-hidden="true" />
-        <label className="sr-only" htmlFor="inventory-search">Search inventory</label>
-        <input
-          id="inventory-search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search items, families, or tags..."
-          type="search"
-        />
+      <PageHeading kicker="Inventory" />
+      <div className="inventory-search-row">
+        <section className="search-bar page-search" aria-label="Inventory search">
+          <span className="search-icon" aria-hidden="true" />
+          <label className="sr-only" htmlFor="inventory-search">Search inventory</label>
+          <input
+            id="inventory-search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search items, families, or tags..."
+            type="search"
+          />
+        </section>
         <button className="primary-button inventory-search-action" type="button" onClick={() => onNavigate('/items/new')}>
           <span className="plus">+</span> Add an item
         </button>
-      </section>
+      </div>
 
       <section className="stats-row" aria-label="Inventory summary">
         <div><span className="stat-value">{visibleItems.length}</span><span className="stat-label">Items in view</span></div>
@@ -234,11 +323,10 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
 
       <section className="workspace-grid">
         <div className="inventory-card">
-          <div className="card-topline inventory-card-heading">
-            <div>
-              <p className="kicker">Current collection</p>
-              <h2>{selectedLocationId ? 'Items in this space' : 'All items'}</h2>
-            </div>
+           <div className="card-topline inventory-card-heading">
+             <div>
+               <h2>{selectedLocationId ? 'Items in this space' : 'All items'}</h2>
+             </div>
              <div className="collection-controls">
                <label className="sr-only" htmlFor="location-filter">Filter by container</label>
                <select id="location-filter" value={selectedLocationId ?? ''} onChange={(event) => setSelectedLocationId(event.target.value || null)}>
@@ -289,6 +377,12 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
            onDesignSpace={() => onNavigate('/designer')}
          />
       </section>
+      {importOpen && <ImportToolsDialog
+        families={familyOptions.map(({ family, path }) => ({ id: family.id, name: family.name, path }))}
+        unorganisedLocationId={locations.find((location) => location.isSystem)?.id ?? ''}
+        onClose={() => setImportOpen(false)}
+        onImported={finishImport}
+      />}
       {bulkModal && (
         <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) closeBulkModal() }}>
           <section className="bulk-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-modal-title">

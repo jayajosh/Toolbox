@@ -14,6 +14,7 @@ public sealed class ItemService(
     ItemFeatureOptions? featureOptions = null)
 {
     private const int MaxQuickAddItems = 100;
+    private const int MaxImportItems = 500;
     private readonly ItemFeatureOptions features = featureOptions ?? new ItemFeatureOptions();
 
     public async Task<IReadOnlyList<ItemSummary>> ListAsync(
@@ -102,6 +103,46 @@ public sealed class ItemService(
         }
 
         return results;
+    }
+
+    public async Task<IReadOnlyList<ImportedItem>> ImportAsync(
+        ImportItemsCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (command.Items.Count == 0)
+        {
+            throw new ArgumentException("The import must contain at least one item.", nameof(command));
+        }
+
+        if (command.Items.Count > MaxImportItems)
+        {
+            throw new ArgumentException($"Imports are limited to {MaxImportItems} items at a time.", nameof(command));
+        }
+
+        await EnsureLocationExists(command.LocationId, cancellationToken);
+        var familyIds = command.Items
+            .Where(item => item.FamilyId.HasValue)
+            .Select(item => item.FamilyId!.Value)
+            .Distinct()
+            .ToArray();
+
+        foreach (var familyId in familyIds)
+        {
+            await EnsureFamilyExists(familyId, cancellationToken);
+        }
+
+        // Build every entity before tracking any of them so row validation is atomic.
+        var items = command.Items
+            .Select(input => Item.Create(input.Name, command.LocationId, familyId: input.FamilyId))
+            .ToArray();
+
+        foreach (var item in items)
+        {
+            await itemRepository.AddAsync(item, cancellationToken);
+        }
+
+        await itemRepository.SaveChangesAsync(cancellationToken);
+        return items.Select(item => new ImportedItem(item.Id, item.Name)).ToArray();
     }
 
     public async Task<ItemDetails> UpdateAsync(

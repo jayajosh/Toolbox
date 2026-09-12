@@ -61,6 +61,27 @@ namespace Toolbox.Infrastructure.Migrations
                     b.ToTable("checkouts", (string)null);
                 });
 
+            modelBuilder.Entity("Toolbox.Domain.Entities.SpacePlan", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ElementsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("MeasurementSettingsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("space_plans", (string)null);
+                });
+
             modelBuilder.Entity("Toolbox.Domain.Entities.Item", b =>
                 {
                     b.Property<Guid>("Id")

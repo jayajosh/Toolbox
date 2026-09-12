@@ -26,6 +26,14 @@ public sealed record QuickAddItemsCommand(
     bool IsConsumable = false,
     ConsumableStatus? ConsumableStatus = null);
 
+public sealed record ImportItemsCommand(
+    Guid LocationId,
+    IReadOnlyList<ImportItemCommand> Items);
+
+public sealed record ImportItemCommand(string Name, Guid? FamilyId = null);
+
+public sealed record ImportedItem(Guid Id, string Name);
+
 public sealed record UpdateItemCommand(
     string Name,
     Guid LocationId,

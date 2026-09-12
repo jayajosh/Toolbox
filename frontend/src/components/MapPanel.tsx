@@ -52,17 +52,16 @@ export function MapPanel({ locations, selectedLocationId, onSelectLocation, onAd
 
   return (
     <section className="map-card" aria-labelledby="map-title">
-      <div className="card-topline">
-        <div>
-          <p className="kicker">Spatial context</p>
-          <h2 id="map-title">Floor plan</h2>
-        </div>
+         <div className="card-topline">
+           <div>
+             <h2 id="map-title">Floor plan</h2>
+           </div>
         {(onAddLocation || onDesignSpace) && <div className="map-header-actions">
           {onAddLocation && <button className="map-add-button" type="button" onClick={onAddLocation}><span aria-hidden="true">+</span> Add container</button>}
         </div>}
       </div>
       <div className="map-canvas" aria-label="Floor plan preview">
-        <svg viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`} role="img" aria-label="Saved space designer plan">
+         <svg viewBox={`0 0 ${WORLD_WIDTH} ${WORLD_HEIGHT}`} role="img" aria-label="Saved floor plan">
           <defs><pattern id="preview-grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" /></pattern></defs>
           <rect width={WORLD_WIDTH} height={WORLD_HEIGHT} className="preview-background" />
           <rect width={WORLD_WIDTH} height={WORLD_HEIGHT} fill="url(#preview-grid)" className="preview-grid" />
@@ -81,7 +80,7 @@ export function MapPanel({ locations, selectedLocationId, onSelectLocation, onAd
           })}
         </svg>
       </div>
-       <div className="map-footer"><div><span className="map-key map-key--active" /> {selectedLocation ? `Selected: ${selectedLocation.name}` : 'Saved designer plan'}</div>{onDesignSpace && <button className="text-button" type="button" onClick={onDesignSpace}>Open space designer &rarr;</button>}</div>
+        <div className="map-footer"><div><span className="map-key map-key--active" /> {selectedLocation ? `Selected: ${selectedLocation.name}` : 'Saved floor plan'}</div>{onDesignSpace && <button className="text-button" type="button" onClick={onDesignSpace}>Open floor plan &rarr;</button>}</div>
     </section>
   )
 }

@@ -212,16 +212,16 @@ movement, deletion, and checkout rules. The frontend covers the primary
 inventory, storage, and designer interactions. Before declaring V1 complete,
 the project still needs continuous integration and final release verification.
 
-### Space designer
+### Floor plan
 
-The browser-based space designer supports walls, rectangles, doors, garage
+The browser-based floor plan supports walls, containers, doors, garage
 doors, and windows. Plans include configurable units, scale, grid size, canvas
 dimensions, snapping, zoom, undo/redo, and JSON export. Storage containers can
 be placed from the Storage library, and inventory maps highlight an item's
 mapped container or its nearest mapped parent.
 
-The current plan is saved in browser local storage. It is not yet persisted to
-PostgreSQL or shared between browsers and devices.
+The current plan is persisted to PostgreSQL and shared between browsers and
+devices. Browser local storage is retained as an offline fallback.
 
 ### Checkout workspace
 
@@ -234,7 +234,7 @@ borrower and retained checkout history.
 ### Known limitations
 
 - There is no account, authentication, or permissions system.
-- Space-designer plans are local to one browser and only export as JSON.
+- Floor plans only export as JSON when a portable copy is needed.
 - Dedicated storage-container detail URLs are deferred; V1 uses hierarchical
   Container filters on the Inventory and checkout pages instead.
 - Automated checks run locally, but a GitHub Actions CI workflow is not yet present.
@@ -259,7 +259,7 @@ The frontend is available at `http://192.168.10.116:7001/`, the API at
 the API applies migrations and inserts demo data when the database is empty.
 The frontend includes inventory search, nested storage, item creation and bulk
 actions, quick-add ranges, tags, families, checkout/check-in, retained history,
-and the local space designer.
+and the floor plan.
 
 For local development without Compose:
 

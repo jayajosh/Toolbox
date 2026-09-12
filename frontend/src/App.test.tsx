@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { INVENTORY_CHANGED_EVENT } from './inventoryEvents'
 
 const locations = [{
   id: 'house', name: 'House', description: null, parentLocationId: null,
@@ -22,7 +23,42 @@ afterEach(() => {
   window.history.pushState({}, '', '/')
 })
 
+describe('theme switching', () => {
+  it('uses Light and Dark labels and persists the selected theme', () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.startsWith('/api/items')
+      ? Response.json(items)
+      : Response.json(locations)))
+    render(<App />)
+
+    expect(document.documentElement.dataset.theme).toBe('light')
+    expect(screen.getByRole('button', { name: 'Switch to dark mode' }).textContent).toContain('Light')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to dark mode' }))
+
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(screen.getByRole('button', { name: 'Switch to light mode' }).textContent).toContain('Dark')
+    expect(window.localStorage.getItem('toolbox-theme')).toBe('dark')
+  })
+})
+
 describe('inventory navigation', () => {
+  it('refreshes an open inventory view after another workflow changes inventory data', async () => {
+    let refreshed = false
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.startsWith('/api/items')) return Response.json(refreshed ? [{ ...items[0], locationPath: 'House / Shelf' }] : items)
+      if (url.startsWith('/api/locations')) return Response.json(locations)
+      if (url.includes('/features')) return Response.json({ checkout: true, checkoutHistory: true })
+      return Response.json([])
+    }))
+    render(<App />)
+    await screen.findByRole('button', { name: /Torque wrench.*House/ })
+
+    refreshed = true
+    window.dispatchEvent(new Event(INVENTORY_CHANGED_EVENT))
+
+    expect(await screen.findByText('House / Shelf')).toBeTruthy()
+  })
+
   it('filters by tag and selects only visible items from the column header', async () => {
     const tag = { id: 'tools', name: 'Tools' }
     vi.stubGlobal('fetch', vi.fn(async (url: string) => {
@@ -72,7 +108,7 @@ describe('inventory navigation', () => {
 
     expect(screen.queryByRole('heading', { name: /Find the thing/ })).toBeNull()
     expect(await screen.findByText('Torque wrench')).toBeTruthy()
-    expect(screen.getByRole('img', { name: 'Saved space designer plan' })).toBeTruthy()
+     expect(screen.getByRole('img', { name: 'Saved floor plan' })).toBeTruthy()
     expect(screen.getByRole('searchbox', { name: 'Search inventory' })).toBeTruthy()
   })
 
@@ -85,9 +121,48 @@ describe('inventory navigation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Add an item/ }))
     expect(window.location.pathname).toBe('/items/new')
-    expect(screen.getByRole('heading', { name: /Give it a place/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1, name: 'Inventory / New item' })).toBeTruthy()
     expect(screen.getByLabelText('Name')).toBeTruthy()
     await waitFor(() => expect((screen.getByLabelText('Storage container') as HTMLSelectElement).value).toBe('unorganised'))
+  })
+
+  it('imports CSV tools into Unorganised and creates missing families', async () => {
+    let imported = false
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url.includes('/features')) return Response.json({ checkout: true, checkoutHistory: true })
+      if (url === '/api/families' && init?.method === 'POST') return Response.json({ id: 'new-family', name: 'Hand tools', parentFamilyId: null, description: null, childCount: 0, itemCount: 0 })
+      if (url === '/api/items/import' && init?.method === 'POST') {
+        imported = true
+        return Response.json([{ id: 'imported-wrench', name: 'Torque wrench' }, { id: 'imported-glasses', name: 'Safety glasses' }], { status: 201 })
+      }
+      if (url.startsWith('/api/items')) return Response.json(imported ? [
+        { ...items[0], id: 'imported-wrench', locationId: 'unorganised', locationPath: 'Unorganised', family: { id: 'new-family', name: 'Hand tools', parentFamilyId: null } },
+        { ...items[0], id: 'imported-glasses', name: 'Safety glasses', locationId: 'unorganised', locationPath: 'Unorganised' },
+      ] : items)
+      if (url.startsWith('/api/locations')) return Response.json(locations)
+      if (url.startsWith('/api/families')) return Response.json([])
+      return Response.json([])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    render(<App />)
+    await screen.findByText('Torque wrench')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import tools' }))
+    const csv = new File(['name,family\nTorque wrench,Hand tools\nSafety glasses,'], 'tools.csv', { type: 'text/csv' })
+    fireEvent.change(screen.getByLabelText('CSV file'), { target: { files: [csv] } })
+    expect(await screen.findByText('2 tools ready')).toBeTruthy()
+    expect(screen.getByText('New families: Hand tools')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Import 2 tools' }))
+
+    expect(await screen.findByRole('heading', { name: 'Change container' })).toBeTruthy()
+    const importCall = fetchMock.mock.calls.find(([url, init]) => url === '/api/items/import' && init?.method === 'POST')
+    expect(JSON.parse(String(importCall?.[1]?.body))).toEqual({
+      locationId: 'unorganised',
+      items: [{ name: 'Torque wrench', familyId: 'new-family' }, { name: 'Safety glasses', familyId: null }],
+    })
+    expect((screen.getByLabelText('Select Torque wrench') as HTMLInputElement).checked).toBe(true)
+    expect((screen.getByLabelText('Select Safety glasses') as HTMLInputElement).checked).toBe(true)
   })
 
   it('opens container creation from Storage while preserving the route', async () => {
@@ -97,9 +172,9 @@ describe('inventory navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Storage' }))
 
     expect(window.location.pathname).toBe('/locations')
-     expect(await screen.findByText('Inventory / Storage')).toBeTruthy()
+     expect(await within(screen.getByRole('main')).findByText('Storage', { exact: true })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Add container/ })).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Your storage' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: 'Your storage' })).toBeNull()
     expect(screen.getByRole('option', { name: 'Top-level container' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Locations' })).toBeNull()
   })
@@ -205,7 +280,7 @@ describe('inventory navigation', () => {
     expect(await screen.findByText('Your inventory is ready for its first item.')).toBeTruthy()
   })
 
-  it('opens the interactive space designer with the storage library', async () => {
+  it('opens the interactive floor plan with the storage library', async () => {
     const internalLocation = {
       id: 'drawer', name: 'Top drawer', description: null, parentLocationId: 'house',
       locationType: 'Drawer', childCount: 0, itemCount: 0, isSystem: false, isInternalComponent: true,
@@ -213,10 +288,11 @@ describe('inventory navigation', () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json([...locations, internalLocation])))
     render(<App />)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Space designer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Floor plan' }))
 
     expect(window.location.pathname).toBe('/designer')
-     expect(screen.getByText('Spaces / Floor plan')).toBeTruthy()
+    expect(document.querySelector('.app-shell')?.classList.contains('is-floor-plan')).toBe(true)
+    expect(screen.getByRole('region', { name: 'Floor plan' })).toBeTruthy()
     expect(screen.getByLabelText('Floor plan drawing canvas')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Wall/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Door/ })).toBeTruthy()
@@ -229,12 +305,51 @@ describe('inventory navigation', () => {
     expect(screen.queryByRole('button', { name: /Top drawer/ })).toBeNull()
   })
 
+  it('loads the floor plan from the server and saves later designer changes', async () => {
+    const serverPlan = [{ id: 'server-wall', type: 'wall', start: { x: 20, y: 20 }, end: { x: 120, y: 20 } }]
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url === '/api/space-plan' && init?.method === 'PUT') return Response.json({ elements: serverPlan, measurementSettings: { unit: 'm', perGrid: 1, gridSize: 20, maxWidth: 60, maxHeight: 38 }, updatedAt: new Date().toISOString() })
+      if (url === '/api/space-plan') return Response.json({ elements: serverPlan, measurementSettings: { unit: 'm', perGrid: 1, gridSize: 20, maxWidth: 60, maxHeight: 38 }, updatedAt: new Date().toISOString() })
+      return Response.json(locations)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    window.history.pushState({}, '', '/designer')
+    const { container } = render(<App />)
+
+    await waitFor(() => expect(container.querySelectorAll('.plan-line--wall')).toHaveLength(1))
+    fireEvent.click(screen.getByRole('button', { name: /Door/ }))
+    const canvas = screen.getByLabelText('Floor plan drawing canvas')
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 816, bottom: 517, width: 816, height: 517, toJSON: () => ({}) })
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 240, clientY: 100 })
+    fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 240, clientY: 100 })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/space-plan', expect.objectContaining({ method: 'PUT' })))
+  })
+
+  it('shows the active tool context in the tools sidebar instead of the inspector', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(locations)))
+    window.history.pushState({}, '', '/designer')
+    render(<App />)
+
+    const tools = screen.getByRole('complementary', { name: 'Drawing tools' })
+    const inspector = screen.getByRole('complementary', { name: 'Properties' })
+    const context = tools.querySelector<HTMLElement>('.tool-context')!
+    expect(within(context).getByText('Select')).toBeTruthy()
+    expect(within(context).getByText('Click an object to edit it')).toBeTruthy()
+    expect(within(inspector).queryByText('Click an object to edit it')).toBeNull()
+
+    fireEvent.click(within(tools).getByRole('button', { name: /Garage door/ }))
+    expect(within(context).getByText('Garage door')).toBeTruthy()
+    expect(within(context).getByText('Click and drag on the grid to draw')).toBeTruthy()
+  })
+
   it('resizes the shared tools/library sidebar with keyboard and captured pointers', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(locations)))
     window.history.pushState({}, '', '/designer')
     render(<App />)
     const handle = screen.getByRole('separator', { name: 'Sidebar width' })
-    const shell = screen.getByRole('region', { name: 'Space designer' })
+     const shell = screen.getByRole('region', { name: 'Floor plan' })
     const capture = vi.fn()
     const release = vi.fn()
     Object.assign(handle, { setPointerCapture: capture, hasPointerCapture: () => true, releasePointerCapture: release })
@@ -278,14 +393,14 @@ describe('inventory navigation', () => {
     window.history.pushState({}, '', '/designer')
     const { container } = render(<App />)
     const canvas = screen.getByLabelText('Floor plan drawing canvas')
-    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 960, bottom: 608, width: 960, height: 608, toJSON: () => ({}) })
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 816, bottom: 517, width: 816, height: 517, toJSON: () => ({}) })
 
     fireEvent.click(screen.getByRole('button', { name: /Wall/ }))
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 100, clientY: 100 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 240, clientY: 100 })
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 240, clientY: 100 })
 
-    expect(container.querySelectorAll('.plan-line--wall')).toHaveLength(6)
+    expect(container.querySelectorAll('.plan-line--wall')).toHaveLength(5)
   })
 
   it('places a storage container from the library onto the grid', async () => {
@@ -295,7 +410,7 @@ describe('inventory navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: /Storage library/ }))
     const location = await screen.findByRole('button', { name: /House/ })
     const canvas = screen.getByLabelText('Floor plan drawing canvas')
-    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 960, bottom: 608, width: 960, height: 608, toJSON: () => ({}) })
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 816, bottom: 517, width: 816, height: 517, toJSON: () => ({}) })
     const values = new Map<string, string>()
     const dataTransfer = {
       effectAllowed: 'all',
@@ -312,8 +427,8 @@ describe('inventory navigation', () => {
     })
     fireEvent(canvas.parentElement!, dropEvent)
 
-    expect(container.querySelectorAll('.plan-area')).toHaveLength(3)
-    expect(container.querySelector('.plan-area.is-selected .plan-area-shape')?.getAttribute('x')).not.toBe('NaN')
+    expect(container.querySelectorAll('.plan-area')).toHaveLength(1)
+    expect(container.querySelector('.plan-area.is-selected .plan-area-shape')?.getAttribute('x')).toBe('360')
     expect(screen.getByText('Mapped')).toBeTruthy()
   })
 

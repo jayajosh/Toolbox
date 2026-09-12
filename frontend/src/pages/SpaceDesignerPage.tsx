@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useRef, useState, type ChangeEvent, type CSSProperties, type DragEvent as ReactDragEvent, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import './SpaceDesignerPage.css'
-import { createLocation, deleteLocation, listLocations } from '../api'
+import { createLocation, deleteLocation, getSpacePlan, listLocations, saveSpacePlan } from '../api'
+import { PageHeading } from '../components/PageHeading'
+import { notifyInventoryChanged } from '../inventoryEvents'
 import type { Location } from '../types'
 
 type Point = { x: number; y: number }
@@ -39,11 +41,8 @@ const starterPlan: PlanElement[] = [
   { id: 'wall-2', type: 'wall', start: { x: 860, y: 140 }, end: { x: 860, y: 600 } },
   { id: 'wall-3', type: 'wall', start: { x: 860, y: 600 }, end: { x: 160, y: 600 } },
   { id: 'wall-4', type: 'wall', start: { x: 160, y: 600 }, end: { x: 160, y: 140 } },
-  { id: 'wall-5', type: 'wall', start: { x: 560, y: 140 }, end: { x: 560, y: 600 } },
-  { id: 'area-1', type: 'area', x: 240, y: 220, width: 220, height: 120, label: 'Workbench' },
-  { id: 'area-2', type: 'area', x: 650, y: 230, width: 120, height: 220, label: 'Storage' },
-  { id: 'door-1', type: 'door', start: { x: 560, y: 500 }, end: { x: 500, y: 500 } },
-  { id: 'window-1', type: 'window', start: { x: 320, y: 140 }, end: { x: 440, y: 140 } },
+  { id: 'garage-door-1', type: 'garageDoor', start: { x: 160, y: 330 }, end: { x: 160, y: 450 } },
+  { id: 'window-1', type: 'window', start: { x: 450, y: 140 }, end: { x: 570, y: 140 } },
 ]
 
 function Icon({ children }: { children: ReactNode }) {
@@ -63,6 +62,10 @@ function cloneElements(elements: PlanElement[]) {
   return structuredClone(elements) as PlanElement[]
 }
 
+function isPlanElements(value: unknown): value is PlanElement[] {
+  return Array.isArray(value) && value.every((element) => typeof element === 'object' && element !== null && 'type' in element && ['wall', 'area', 'door', 'garageDoor', 'window'].includes(String(element.type)))
+}
+
 function loadPlan() {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY)
@@ -72,17 +75,20 @@ function loadPlan() {
   }
 }
 
+function parseMeasurementSettings(value: unknown): MeasurementSettings | null {
+  if (typeof value !== 'object' || value === null) return null
+  const settings = value as Partial<MeasurementSettings>
+  if (!['ft', 'in', 'm', 'cm', 'mm'].includes(settings.unit ?? '') || !Number.isFinite(settings.perGrid) || settings.perGrid! <= 0 || !Number.isFinite(settings.gridSize) || settings.gridSize! < 5 || !Number.isFinite(settings.maxWidth) || settings.maxWidth! <= 0 || !Number.isFinite(settings.maxHeight) || settings.maxHeight! <= 0) return null
+  return { unit: settings.unit as MeasurementUnit, perGrid: settings.perGrid!, gridSize: settings.gridSize!, maxWidth: settings.maxWidth!, maxHeight: settings.maxHeight! }
+}
+
 function loadMeasurementSettings(): MeasurementSettings {
   try {
     const saved = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
-    if (!saved) return { unit: 'ft', perGrid: 1, gridSize: DEFAULT_GRID_SIZE, maxWidth: DEFAULT_MAX_WIDTH, maxHeight: DEFAULT_MAX_HEIGHT }
-    const settings = JSON.parse(saved) as Partial<MeasurementSettings>
-    if (!['ft', 'in', 'm', 'cm', 'mm'].includes(settings.unit ?? '') || !Number.isFinite(settings.perGrid) || settings.perGrid! <= 0 || !Number.isFinite(settings.gridSize) || settings.gridSize! < 5 || !Number.isFinite(settings.maxWidth) || settings.maxWidth! <= 0 || !Number.isFinite(settings.maxHeight) || settings.maxHeight! <= 0) {
-      return { unit: 'ft', perGrid: 1, gridSize: DEFAULT_GRID_SIZE, maxWidth: DEFAULT_MAX_WIDTH, maxHeight: DEFAULT_MAX_HEIGHT }
-    }
-    return { unit: settings.unit as MeasurementUnit, perGrid: settings.perGrid!, gridSize: settings.gridSize!, maxWidth: settings.maxWidth!, maxHeight: settings.maxHeight! }
+    const parsed = saved ? parseMeasurementSettings(JSON.parse(saved)) : null
+    return parsed ?? { unit: 'm', perGrid: 1, gridSize: DEFAULT_GRID_SIZE, maxWidth: DEFAULT_MAX_WIDTH, maxHeight: DEFAULT_MAX_HEIGHT }
   } catch {
-    return { unit: 'ft', perGrid: 1, gridSize: DEFAULT_GRID_SIZE, maxWidth: DEFAULT_MAX_WIDTH, maxHeight: DEFAULT_MAX_HEIGHT }
+    return { unit: 'm', perGrid: 1, gridSize: DEFAULT_GRID_SIZE, maxWidth: DEFAULT_MAX_WIDTH, maxHeight: DEFAULT_MAX_HEIGHT }
   }
 }
 
@@ -140,22 +146,59 @@ export function SpaceDesignerPage() {
   const [newLocationParentId, setNewLocationParentId] = useState<string | null>(null)
   const [creatingLocation, setCreatingLocation] = useState(false)
   const [deletingLocation, setDeletingLocation] = useState(false)
+  const [planReady, setPlanReady] = useState(false)
+  const skipPlanSave = useRef(true)
   const svgRef = useRef<SVGSVGElement>(null)
   const storageLabelRef = useRef<HTMLInputElement>(null)
+  const planFileInputRef = useRef<HTMLInputElement>(null)
 
   const selected = elements.find((element) => element.id === selectedId) ?? null
   const canvasWidth = Math.max(measurementSettings.gridSize, Math.round(measurementSettings.maxWidth / measurementSettings.perGrid) * measurementSettings.gridSize)
   const canvasHeight = Math.max(measurementSettings.gridSize, Math.round(measurementSettings.maxHeight / measurementSettings.perGrid) * measurementSettings.gridSize)
   const snap = (value: number) => snapEnabled ? Math.round(value / measurementSettings.gridSize) * measurementSettings.gridSize : Math.round(value)
   const clampPoint = (point: Point) => ({ x: Math.min(canvasWidth, Math.max(0, point.x)), y: Math.min(canvasHeight, Math.max(0, point.y)) })
+  const saveFallbackPlan = useEffectEvent(() => {
+    void saveSpacePlan(elements, measurementSettings).catch(() => undefined)
+  })
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(elements))
-  }, [elements])
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(measurementSettings))
+  }, [elements, measurementSettings])
 
   useEffect(() => {
-    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(measurementSettings))
-  }, [measurementSettings])
+    if (!planReady) return
+    if (skipPlanSave.current) {
+      skipPlanSave.current = false
+      return
+    }
+    const saveTimer = window.setTimeout(() => {
+      void saveSpacePlan(elements, measurementSettings).catch(() => undefined)
+    }, 300)
+    return () => window.clearTimeout(saveTimer)
+  }, [elements, measurementSettings, planReady])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getSpacePlan(controller.signal)
+      .then((plan) => {
+        const settings = parseMeasurementSettings(plan.measurementSettings)
+        if (!isPlanElements(plan.elements) || !settings) {
+          saveFallbackPlan()
+          return
+        }
+        setElements(plan.elements)
+        setMeasurementSettings(settings)
+        skipPlanSave.current = true
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof DOMException && reason.name === 'AbortError') return
+        // Local storage remains the offline fallback when the server has no plan yet.
+        saveFallbackPlan()
+      })
+      .finally(() => setPlanReady(true))
+    return () => controller.abort()
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -197,9 +240,16 @@ export function SpaceDesignerPage() {
     return () => window.removeEventListener('keydown', onKeyDown)
   })
 
-  function pointFromEvent(event: ReactPointerEvent<SVGElement>) {
+  function pointFromClientPosition(clientX: number, clientY: number) {
     const rect = svgRef.current!.getBoundingClientRect()
-    return clampPoint({ x: snap((event.clientX - rect.left) / zoom), y: snap((event.clientY - rect.top) / zoom) })
+    return clampPoint({
+      x: snap((clientX - rect.left) * canvasWidth / rect.width),
+      y: snap((clientY - rect.top) * canvasHeight / rect.height),
+    })
+  }
+
+  function pointFromEvent(event: ReactPointerEvent<SVGElement>) {
+    return pointFromClientPosition(event.clientX, event.clientY)
   }
 
   function resizeSidebar(width: number) {
@@ -354,7 +404,7 @@ export function SpaceDesignerPage() {
     const location = locations.find((item) => item.id === id)
     const rect = svgRef.current?.getBoundingClientRect()
     if (!location || !rect) return
-    placeLocation(location, { x: snap((event.clientX - rect.left) / zoom), y: snap((event.clientY - rect.top) / zoom) })
+    placeLocation(location, pointFromClientPosition(event.clientX, event.clientY))
   }
 
   async function confirmNewLocation(event: FormEvent<HTMLFormElement>) {
@@ -371,6 +421,7 @@ export function SpaceDesignerPage() {
          isInternalComponent: false,
          color: '#728a77',
       })
+      notifyInventoryChanged()
       setElements((currentElements) => currentElements.map((element) => element.id === pendingArea.id && element.type === 'area'
         ? { ...element, label: newLocationName.trim(), locationId: created.id }
         : element))
@@ -417,6 +468,7 @@ export function SpaceDesignerPage() {
       setDeletingLocation(true)
       try {
         await deleteLocation(selected.locationId)
+        notifyInventoryChanged()
         setLocations((current) => current.filter((location) => location.id !== selected.locationId))
       } catch (reason: unknown) {
         setLocationError(reason instanceof Error ? reason.message : 'Could not delete this storage container.')
@@ -447,6 +499,21 @@ export function SpaceDesignerPage() {
     link.download = 'toolbox-space-plan.json'
     link.click()
     URL.revokeObjectURL(url)
+  }
+
+  function importPlan(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    file.text()
+      .then((contents) => {
+        const imported = JSON.parse(contents) as { elements?: PlanElement[]; measurementSettings?: MeasurementSettings }
+        if (!Array.isArray(imported.elements) || !imported.measurementSettings) throw new Error('Invalid plan')
+        saveChange(imported.elements)
+        setMeasurementSettings(imported.measurementSettings)
+        setSelectedId(null)
+      })
+      .catch(() => setLocationError('Could not import that floor plan.'))
   }
 
   function renderElement(element: PlanElement) {
@@ -517,27 +584,19 @@ export function SpaceDesignerPage() {
 
   return (
     <main className="designer-page">
-        <header className="designer-heading">
-          <div>
-            <p className="kicker">Spaces / Floor plan</p>
-          </div>
-        <div className="designer-heading-actions">
-          <span className="save-status"><span /> Saved locally</span>
-          <button className="secondary-button" type="button" onClick={clearPlan}>New plan</button>
-          <button className="primary-button" type="button" onClick={exportPlan}>Export plan <span aria-hidden="true">&darr;</span></button>
-        </div>
-      </header>
+      <PageHeading kicker="Floor plan" actions={<span className="save-status"><span /> Saved</span>} />
 
-      <section className={libraryOpen ? 'designer-shell is-library-open' : 'designer-shell'} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} aria-label="Space designer">
+       <section className={libraryOpen ? 'designer-shell is-library-open' : 'designer-shell'} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} aria-label="Floor plan">
          <aside id="designer-sidebar" className={libraryOpen ? 'designer-tools is-library' : 'designer-tools'} aria-label={libraryOpen ? 'Storage library' : 'Drawing tools'}>
            {!libraryOpen ? <>
               <span className="tool-section-label">Tools</span>
               {toolDetails.map((item) => <button key={item.tool} className={tool === item.tool ? 'designer-tool is-active' : 'designer-tool'} type="button" onClick={() => setTool(item.tool)} title={`${item.label} (${item.shortcut})`}>{item.icon}<span>{item.label}</span><kbd>{item.shortcut}</kbd></button>)}
               <button className="designer-tool library-toggle" type="button" onClick={() => setLibraryOpen(true)}><Icon><path d="M4 6h16M4 12h16M4 18h16" /></Icon><span>Storage library</span></button>
-              <div className="tool-divider" />
-             <button className="designer-tool designer-tool--compact" type="button" onClick={undo} disabled={!undoStack.length} title="Undo"><Icon><path d="M9 7H5v-4M5 7c2-3 5-4 8-3 4 1 7 5 6 9s-5 7-9 6c-2 0-4-2-5-4" /></Icon><span>Undo</span></button>
+                <div className="tool-divider" />
+               <div className="tool-context" aria-live="polite"><strong>{toolDetails.find((item) => item.tool === tool)?.label}</strong><span>{tool === 'select' ? 'Click an object to edit it' : 'Click and drag on the grid to draw'}</span></div>
+              <button className="designer-tool designer-tool--compact" type="button" onClick={undo} disabled={!undoStack.length} title="Undo"><Icon><path d="M9 7H5v-4M5 7c2-3 5-4 8-3 4 1 7 5 6 9s-5 7-9 6c-2 0-4-2-5-4" /></Icon><span>Undo</span></button>
              <button className="designer-tool designer-tool--compact" type="button" onClick={redo} disabled={!redoStack.length} title="Redo"><Icon><path d="M15 7h4v-4M19 7c-2-3-5-4-8-3-4 1-7 5-6 9s5 7 9 6c2 0 4-2 5-4" /></Icon><span>Redo</span></button>
-           </> : <section className="location-library" aria-labelledby="location-library-title">
+            </> : <section className="location-library" aria-labelledby="location-library-title">
              <button className="library-back" type="button" onClick={() => setLibraryOpen(false)}><span aria-hidden="true">&larr;</span> Back to tools</button>
               <div className="library-heading"><div><p className="kicker">Storage library</p><h2 id="location-library-title">Your containers</h2></div></div>
              <p className="library-help">Drag a storage container onto the plan, or click to place it.</p>
@@ -611,11 +670,18 @@ export function SpaceDesignerPage() {
         </div>
 
           <aside className="designer-inspector" aria-label="Properties">
-            {!selected && <div className="inspector-empty">
-              <div className="inspector-context"><strong>{toolDetails.find((item) => item.tool === tool)?.label}</strong><span>{tool === 'select' ? 'Click an object to edit it' : 'Click and drag on the grid to draw'}</span></div>
-              <span className="inspector-empty-icon">+</span><strong>Nothing selected</strong><p>Select an object on the plan to adjust its size and position.</p>
-              {renderCanvasControls()}
-            </div>}
+             {!selected && <div className="inspector-empty">
+                <span className="inspector-empty-icon">+</span><strong>Nothing selected</strong><p>Select an object on the plan to adjust its size and position.</p>
+                <div className="inspector-empty-actions">
+                  <button className="secondary-button" type="button" onClick={clearPlan}>New plan</button>
+                  <div className="inspector-plan-actions">
+                    <button className="secondary-button" type="button" onClick={() => planFileInputRef.current?.click()}>Import plan</button>
+                    <button className="primary-button" type="button" onClick={exportPlan}>Export plan</button>
+                  </div>
+                  <input ref={planFileInputRef} className="sr-only" type="file" accept="application/json,.json" onChange={importPlan} />
+                </div>
+               {renderCanvasControls()}
+             </div>}
           {selected && <div className="inspector-content">
             <div className="selection-type"><span className={`selection-swatch selection-swatch--${selected.type}`} /><div><small>Selected</small><strong>{selected.type === 'area' ? selected.label : selected.type}</strong></div></div>
              {selected.type === 'area' && <label className="inspector-field"><span>Label</span><input ref={storageLabelRef} value={selected.label} onChange={(event) => updateSelected({ label: event.target.value })} /></label>}

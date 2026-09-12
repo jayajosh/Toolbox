@@ -1,4 +1,4 @@
-import type { FamilySummary, Item, ItemDetails, ItemInput, Location, LocationInput, QuickAddInput, Tag } from './types'
+import type { FamilySummary, ImportedItem, ImportItemInput, Item, ItemDetails, ItemInput, Location, LocationInput, QuickAddInput, Tag } from './types'
 
 export type ItemFeatures = { checkout: boolean; checkoutHistory: boolean }
 export type SpacePlan = { elements: unknown; measurementSettings: unknown; updatedAt: string }
@@ -85,6 +85,13 @@ export function createItem(input: ItemInput) {
 
 export function quickAddItems(input: QuickAddInput) {
   return request<ItemDetails[]>('/api/items/quick-add', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function importItems(locationId: string, items: ImportItemInput[]) {
+  return request<ImportedItem[]>('/api/items/import', {
+    method: 'POST',
+    body: JSON.stringify({ locationId, items }),
+  })
 }
 
 export function updateItem(id: string, input: ItemInput) {

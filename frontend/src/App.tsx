@@ -7,11 +7,12 @@ import { LocationsPage } from './pages/LocationsPage'
 import { SpaceDesignerPage } from './pages/SpaceDesignerPage'
 
 type Route = { page: 'inventory' | 'item' | 'locations' | 'designer' | 'checkout'; id?: string }
-type Theme = 'day' | 'night'
+type Theme = 'light' | 'dark'
+export type InventoryAction = 'import' | 'export'
 const THEME_KEY = 'toolbox-theme'
 
 function initialTheme(): Theme {
-  return window.localStorage.getItem(THEME_KEY) === 'night' ? 'night' : 'day'
+  return window.localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'
 }
 
 function routeFromLocation(): Route {
@@ -24,7 +25,15 @@ function routeFromLocation(): Route {
 }
 
 function ThemeSwitch({ theme, className, onToggle }: { theme: Theme; className: string; onToggle: () => void }) {
-  return <button className={`theme-switch ${className}`} type="button" onClick={onToggle} aria-label={`Switch to ${theme === 'day' ? 'night' : 'day'} mode`}><span className="theme-switch-label">{theme === 'day' ? 'Day' : 'Night'}</span><span className="theme-switch-track"><span className="theme-switch-thumb" /></span></button>
+  return <button className={`theme-switch ${className}`} type="button" onClick={onToggle} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}><span className="theme-switch-label">{theme === 'light' ? 'Light' : 'Dark'}</span><span className="theme-switch-track"><span className="theme-switch-thumb" /></span></button>
+}
+
+function HeaderTools({ theme, onInventoryAction, onToggleTheme }: { theme: Theme; onInventoryAction: (action: InventoryAction) => void; onToggleTheme: () => void }) {
+  return <div className="header-tools">
+    <button className="header-tool-action" type="button" onClick={() => onInventoryAction('import')}>Import tools</button>
+    <button className="header-tool-action" type="button" onClick={() => onInventoryAction('export')}>Export tools</button>
+    <ThemeSwitch theme={theme} className="theme-switch--desktop" onToggle={onToggleTheme} />
+  </div>
 }
 
 export default function App() {
@@ -48,23 +57,31 @@ export default function App() {
   }
 
   function toggleTheme() {
-    setTheme((current) => current === 'day' ? 'night' : 'day')
+    setTheme((current) => current === 'light' ? 'dark' : 'light')
+  }
+
+  function requestInventoryAction(action: InventoryAction) {
+    const dispatch = () => window.dispatchEvent(new Event(`toolbox:${action}-tools`))
+    if (route.page === 'inventory') dispatch()
+    else {
+      navigate('/')
+      window.setTimeout(dispatch, 0)
+    }
   }
 
   return (
-    <div className="app-shell" data-theme={theme}>
+    <div className={route.page === 'designer' ? 'app-shell is-floor-plan' : 'app-shell'} data-theme={theme}>
       <header className="app-header">
         <Brand onNavigate={navigate} />
         <nav className="main-nav" aria-label="Main navigation">
            <button className={route.page === 'inventory' ? 'nav-link is-active' : 'nav-link'} type="button" onClick={() => navigate('/')}>Inventory</button>
            <button className={route.page === 'locations' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/locations')}>Storage</button>
-           <button className={route.page === 'designer' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/designer')}>Space designer</button>
+           <button className={route.page === 'designer' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/designer')}>Floor plan</button>
            <button className={route.page === 'checkout' ? 'nav-link is-active' : 'nav-link nav-link--muted'} type="button" onClick={() => navigate('/checkout')}>Check out</button>
          </nav>
-         <ThemeSwitch theme={theme} className="theme-switch--desktop" onToggle={toggleTheme} />
-      </header>
-      <div className="mobile-theme-row"><ThemeSwitch theme={theme} className="theme-switch--mobile" onToggle={toggleTheme} /></div>
-      {route.page === 'inventory' && <InventoryPage onNavigate={navigate} />}
+          <HeaderTools theme={theme} onInventoryAction={requestInventoryAction} onToggleTheme={toggleTheme} />
+       </header>
+       {route.page === 'inventory' && <InventoryPage onNavigate={navigate} />}
       {route.page === 'checkout' && <CheckoutPage onNavigate={navigate} />}
       {route.page === 'item' && <ItemPage id={route.id} onNavigate={navigate} />}
       {route.page === 'locations' && <LocationsPage onNavigate={navigate} />}

@@ -88,6 +88,39 @@ public sealed class ItemServiceTests
     }
 
     [Fact]
+    public async Task ImportCreatesAllItemsInOneSave()
+    {
+        var locations = new FakeLocationRepository();
+        var unorganised = locations.Add(Location.Create("Unorganised"));
+        var repository = new FakeItemRepository();
+        var service = new ItemService(repository, locations);
+
+        var results = await service.ImportAsync(
+            new ImportItemsCommand(unorganised.Id, [new("Torque wrench"), new("Safety glasses")]),
+            CancellationToken.None);
+
+        Assert.Equal(["Torque wrench", "Safety glasses"], results.Select(item => item.Name));
+        Assert.All(repository.Items, item => Assert.Equal(unorganised.Id, item.LocationId));
+        Assert.Equal(1, repository.SaveCount);
+    }
+
+    [Fact]
+    public async Task ImportRejectsTheWholeBatchWhenAnyNameIsInvalid()
+    {
+        var locations = new FakeLocationRepository();
+        var unorganised = locations.Add(Location.Create("Unorganised"));
+        var repository = new FakeItemRepository();
+        var service = new ItemService(repository, locations);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.ImportAsync(
+            new ImportItemsCommand(unorganised.Id, [new("Torque wrench"), new(" ")]),
+            CancellationToken.None));
+
+        Assert.Empty(repository.Items);
+        Assert.Equal(0, repository.SaveCount);
+    }
+
+    [Fact]
     public async Task DetailsExposeActiveCheckoutAndPreventDeletingIt()
     {
         var locations = new FakeLocationRepository();
@@ -162,6 +195,7 @@ public sealed class ItemServiceTests
     private sealed class FakeItemRepository : IItemRepository
     {
         public List<Item> Items { get; } = [];
+        public int SaveCount { get; private set; }
 
         public Task<IReadOnlyList<Item>> ListAsync(string? search, CancellationToken cancellationToken)
         {
@@ -192,6 +226,10 @@ public sealed class ItemServiceTests
 
         public void Remove(Item item) => Items.Remove(item);
 
-        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task SaveChangesAsync(CancellationToken cancellationToken)
+        {
+            SaveCount++;
+            return Task.CompletedTask;
+        }
     }
 }

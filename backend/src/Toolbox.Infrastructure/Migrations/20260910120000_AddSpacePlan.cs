@@ -1,9 +1,13 @@
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Toolbox.Infrastructure.Persistence;
 
 #nullable disable
 
 namespace Toolbox.Infrastructure.Migrations;
 
+[DbContext(typeof(ToolboxDbContext))]
+[Migration("20260910120000_AddSpacePlan")]
 public partial class AddSpacePlan : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

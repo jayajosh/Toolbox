@@ -1,17 +1,10 @@
-.inventory-hero {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 30px;
-}
-
 .stats-row {
   display: flex;
   align-items: center;
   gap: 0;
   margin-top: 35px;
   padding-bottom: 35px;
-  border-bottom: 1px solid #c6c9bf;
+  border-bottom: 1px solid var(--border);
 }
 
 .stats-row > div:not(.stats-note) {
@@ -22,26 +15,22 @@
 }
 
 .stats-row > div + div {
-  border-left: 1px solid #c6c9bf;
+  border-left: 1px solid var(--border);
   padding-left: 28px;
 }
 
 .stat-value {
-  color: #25352f;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 32px;
+  color: var(--text);
   line-height: 1;
 }
 
 .stat-value--warm {
-  color: #d36b3c;
+  color: var(--accent);
 }
 
 .stat-label {
   margin-top: 7px;
-  color: #78837b;
-  font-family: "Courier New", monospace;
-  font-size: 10px;
+  color: var(--muted);
   letter-spacing: 0.4px;
   text-transform: uppercase;
 }
@@ -51,9 +40,7 @@
   align-items: center;
   gap: 8px;
   margin-left: auto;
-  color: #78837b;
-  font-family: "Courier New", monospace;
-  font-size: 10px;
+  color: var(--muted);
   text-transform: uppercase;
 }
 
@@ -61,8 +48,8 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #6f9473;
-  box-shadow: 0 0 0 4px #6f947320;
+  background: var(--live-status);
+  box-shadow: 0 0 0 4px var(--live-status-ring);
 }
 
 .workspace-grid {
@@ -72,39 +59,142 @@
   margin-top: 35px;
 }
 
+.inventory-search-row {
+  display: flex;
+  align-items: stretch;
+  gap: 17px;
+}
+
+.inventory-search-row .search-bar {
+  flex: 1;
+  margin-top: 0;
+}
+
 .inventory-search-action {
   flex: 0 0 auto;
+  min-height: 67px;
+  box-shadow: 5px 5px 0 var(--border);
+}
+
+.inventory-card,
+.map-card {
+  box-shadow: 6px 7px 0 var(--border);
+}
+
+.inventory-card > .card-topline,
+.map-card > .card-topline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  background: var(--surface-alt);
+  border-top: 3px solid var(--title-accent);
+}
+
+.inventory-card > .card-topline .kicker,
+.map-card > .card-topline .kicker {
+  display: inline-block;
+  margin-bottom: 11px;
+  padding: 3px 7px 2px;
+  background: var(--title-accent);
+  color: var(--accent-foreground);
+}
+.inventory-card > .card-topline h2,
+.circulation-card-topline h2,
+.map-card > .card-topline h2 {
+  color: var(--title-accent);
+}
+.circulation-card-topline--out h2 {
+  color: var(--accent);
+}
+
+.inventory-card .collection-controls {
+  align-self: end;
+  gap: 10px;
+}
+
+.inventory-card .result-count {
+  font-weight: 700;
+}
+
+.import-tools-modal {
+  width: min(640px, 100%);
+}
+
+.import-tools-body {
+  gap: 18px;
+}
+
+.import-tools-body > p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.import-template-button {
+  align-self: start;
+}
+
+.import-file-field {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.import-file-field input {
+  width: 100%;
+  padding: 13px;
+  border: 1px dashed var(--border);
+  background: var(--surface);
+}
+
+.import-summary,
+.import-errors {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.import-summary {
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--muted);
+}
+
+.import-summary strong {
+  color: var(--text);
 }
 .plus {
-  color: #f09b6c;
-  font-size: 20px;
+  color: var(--accent);
   font-weight: 400;
   line-height: 0;
 }
 .modal-tag-list input {
-  accent-color: #d36b3c;
+  accent-color: var(--accent);
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin: 0;
 }
 .danger-button {
   min-height: 36px;
   padding: 0 12px;
-  border: 1px solid #b95e3a;
+  border: 1px solid var(--accent);
   border-radius: 2px;
   background: transparent;
-  color: #a94f2b;
-  font-size: 10px;
+  color: var(--accent);
   font-weight: 800;
 }
 .danger-button:hover {
-  background: #a94f2b;
-  color: #fff9f1;
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 .danger-button:disabled {
   cursor: wait;
   opacity: 0.5;
 }
 .danger-button--solid {
-  background: #a94f2b;
-  color: #fff9f1;
+  background: var(--accent);
+  color: var(--accent-foreground);
 }
 .modal-tag-list {
   display: grid;
@@ -112,8 +202,8 @@
   max-height: 290px;
   padding: 7px;
   overflow-y: auto;
-  border: 1px solid #c5ccc3;
-  background: #fbfaf5;
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
 .modal-tag-list label {
   display: flex;
@@ -121,17 +211,10 @@
   gap: 9px;
   min-width: 0;
   padding: 9px;
-  color: #526158;
-  font-size: 12px;
+  color: var(--text);
 }
 .modal-tag-list label:hover {
-  background: #e9ede5;
-}
-.modal-tag-list input {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-  margin: 0;
+  background: var(--surface-alt);
 }
 .modal-tag-list span {
   overflow: hidden;
@@ -140,26 +223,24 @@
 }
 .modal-tag-list > p,
 .delete-warning {
-  color: #6f7b72;
-  font-size: 13px;
+  color: var(--muted);
   line-height: 1.7;
 }
 .item-status {
   display: flex;
   flex-direction: column;
   color: #568064;
-  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
 }
 .item-status small {
   margin-top: 3px;
-  color: #8a938b;
-  font-size: 9px;
+  color: var(--muted);
   font-weight: 400;
 }
 .item-status--out {
-  color: #d36b3c;
+  color: var(--accent);
+  text-transform: none;
 }
 .empty-state {
   padding: 62px 28px;
@@ -167,52 +248,50 @@
 }
 .empty-icon {
   display: block;
-  color: #d36b3c;
-  font-size: 44px;
+  color: var(--accent);
   line-height: 1;
 }
 .empty-state h3 {
   margin-top: 16px;
-  font-size: 21px;
   font-weight: 400;
 }
 .empty-state p {
   margin: 8px auto 22px;
-  color: #7d887f;
-  font-size: 13px;
+  color: var(--muted);
 }
 .map-header-actions {
   display: flex;
   align-items: center;
   gap: 14px;
 }
+.map-card .map-header-actions {
+  align-self: end;
+}
 .map-add-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 7px 9px;
-  border: 1px solid #aeb5ad;
-  background: transparent;
-  color: #a94f2b;
-  font-size: 9px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-foreground);
   font-weight: 700;
   text-transform: uppercase;
 }
 .map-add-button:hover {
-  border-color: #d36b3c;
-  background: #fff9f1;
+  background: var(--accent-surface);
 }
 .map-add-button span {
-  font-size: 15px;
   font-weight: 400;
   line-height: 0;
 }
 .text-button {
   padding: 0;
   background: none;
-  color: #a94f2b;
-  font-size: 10px;
+  color: var(--accent-foreground);
+  font-weight: 700;
   text-decoration: underline;
+  text-decoration-color: var(--accent);
   text-underline-offset: 3px;
 }
 body .stat-value {
@@ -232,9 +311,11 @@ body .empty-icon {
 }
 
 @media (max-width: 680px) {
-  .inventory-hero {
-    align-items: start;
+  .inventory-search-row {
     flex-direction: column;
+  }
+  .inventory-search-action {
+    min-height: 59px;
   }
   .stats-row {
     align-items: start;
@@ -257,6 +338,7 @@ body .empty-icon {
     display: none;
   }
   .inventory-card-heading {
+    display: flex;
     align-items: stretch;
     flex-direction: column;
     gap: 14px;
@@ -266,35 +348,22 @@ body .empty-icon {
   }
 }
 
-:root[data-theme="night"] .stats-row,
-:root[data-theme="night"] .stats-row > div + div {
-  border-color: var(--night-border);
+:root[data-theme="dark"] .inventory-card {
+  box-shadow: 6px 7px 0 var(--dark-shadow);
 }
-:root[data-theme="night"] .stat-value {
-  color: var(--night-text);
+:root[data-theme="dark"] .modal-tag-list {
+  background: var(--dark-surface-2);
 }
-:root[data-theme="night"] .stat-label,
-:root[data-theme="night"] .stats-note,
-:root[data-theme="night"] .item-status small,
-:root[data-theme="night"] .empty-state p,
-:root[data-theme="night"] .modal-tag-list > p,
-:root[data-theme="night"] .delete-warning {
-  color: var(--night-muted);
+:root[data-theme="dark"] .modal-tag-list label {
+  color: var(--dark-muted);
 }
-:root[data-theme="night"] .modal-tag-list {
-  border-color: var(--night-border);
-  background: var(--night-surface-2);
+:root[data-theme="dark"] .item-status {
+  color: var(--dark-text);
 }
-:root[data-theme="night"] .modal-tag-list label {
-  color: var(--night-muted);
+:root[data-theme="dark"] .plus {
+  color: var(--accent-foreground);
 }
-:root[data-theme="night"] .modal-tag-list label:hover {
-  background: var(--night-surface-3);
-}
-:root[data-theme="night"] .item-status {
-  color: var(--night-text);
-}
-:root[data-theme="night"] .pulse-dot {
-  background: var(--night-accent);
-  box-shadow: 0 0 0 4px #d36b3c2b;
+:root[data-theme="dark"] .import-file-field input {
+  background: var(--dark-surface-2);
+  color: var(--dark-text);
 }

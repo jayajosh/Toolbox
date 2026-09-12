@@ -85,3 +85,13 @@ export type QuickAddInput = {
   isConsumable: boolean
   consumableStatus: ConsumableStatus | null
 }
+
+export type ImportItemInput = {
+  name: string
+  familyId: string | null
+}
+
+export type ImportedItem = {
+  id: string
+  name: string
+}
