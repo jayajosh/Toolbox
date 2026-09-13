@@ -112,6 +112,20 @@ describe('inventory navigation', () => {
     expect(screen.getByRole('searchbox', { name: 'Search inventory' })).toBeTruthy()
   })
 
+  it('loads the shared floor plan in the inventory preview', async () => {
+    const serverPlan = [{ id: 'server-wall', type: 'wall', start: { x: 20, y: 20 }, end: { x: 120, y: 20 } }]
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url.startsWith('/api/items')) return Response.json(items)
+      if (url === '/api/space-plan') return Response.json({ elements: serverPlan, measurementSettings: {}, updatedAt: new Date().toISOString() })
+      return Response.json(locations)
+    }))
+    const { container } = render(<App />)
+
+    await screen.findByText('Torque wrench')
+    await waitFor(() => expect(container.querySelectorAll('.preview-wall')).toHaveLength(1))
+    expect(container.querySelector('.preview-wall')?.getAttribute('x1')).toBe('20')
+  })
+
   it('opens the item management page as a subpage', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.startsWith('/api/items')
       ? Response.json(items)
@@ -324,6 +338,31 @@ describe('inventory navigation', () => {
     fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 100, clientY: 100 })
     fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 240, clientY: 100 })
     fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 240, clientY: 100 })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/space-plan', expect.objectContaining({ method: 'PUT' })))
+  })
+
+  it('migrates a customized local plan when the server still has the starter plan', async () => {
+    const localPlan = [{ id: 'local-wall', type: 'wall', start: { x: 20, y: 20 }, end: { x: 120, y: 20 } }]
+    const starterPlan = [
+      { id: 'wall-1', type: 'wall', start: { x: 160, y: 140 }, end: { x: 860, y: 140 } },
+      { id: 'wall-2', type: 'wall', start: { x: 860, y: 140 }, end: { x: 860, y: 600 } },
+      { id: 'wall-3', type: 'wall', start: { x: 860, y: 600 }, end: { x: 160, y: 600 } },
+      { id: 'wall-4', type: 'wall', start: { x: 160, y: 600 }, end: { x: 160, y: 140 } },
+      { id: 'garage-door-1', type: 'garageDoor', start: { x: 160, y: 330 }, end: { x: 160, y: 450 } },
+      { id: 'window-1', type: 'window', start: { x: 450, y: 140 }, end: { x: 570, y: 140 } },
+    ]
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+      if (url === '/api/space-plan' && init?.method === 'PUT') return Response.json({ elements: localPlan, measurementSettings: { unit: 'm', perGrid: 1, gridSize: 20, maxWidth: 60, maxHeight: 38 }, updatedAt: new Date().toISOString() })
+      if (url === '/api/space-plan') return Response.json({ elements: starterPlan, measurementSettings: { unit: 'm', perGrid: 1, gridSize: 20, maxWidth: 60, maxHeight: 38 }, updatedAt: new Date().toISOString() })
+      return Response.json(locations)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    window.localStorage.setItem('toolbox-space-plan-v1', JSON.stringify(localPlan))
+    window.history.pushState({}, '', '/designer')
+    const { container } = render(<App />)
+
+    await waitFor(() => expect(container.querySelectorAll('.plan-line--wall')).toHaveLength(1))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/space-plan', expect.objectContaining({ method: 'PUT' })))
   })
 

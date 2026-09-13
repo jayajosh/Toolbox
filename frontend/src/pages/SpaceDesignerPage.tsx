@@ -66,6 +66,25 @@ function isPlanElements(value: unknown): value is PlanElement[] {
   return Array.isArray(value) && value.every((element) => typeof element === 'object' && element !== null && 'type' in element && ['wall', 'area', 'door', 'garageDoor', 'window'].includes(String(element.type)))
 }
 
+function samePoint(left: Point, right: Point) {
+  return left.x === right.x && left.y === right.y
+}
+
+function isStarterPlan(elements: PlanElement[]) {
+  if (elements.length !== starterPlan.length) return false
+  return starterPlan.every((expected) => {
+    const actual = elements.find((element) => element.id === expected.id)
+    if (!actual || actual.type !== expected.type) return false
+    if ('start' in expected && 'end' in expected && 'start' in actual && 'end' in actual) {
+      return samePoint(actual.start, expected.start) && samePoint(actual.end, expected.end)
+    }
+    if ('x' in expected && 'y' in expected && 'width' in expected && 'height' in expected && 'x' in actual && 'y' in actual && 'width' in actual && 'height' in actual) {
+      return actual.x === expected.x && actual.y === expected.y && actual.width === expected.width && actual.height === expected.height && actual.label === expected.label
+    }
+    return false
+  })
+}
+
 function loadPlan() {
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY)
@@ -160,6 +179,7 @@ export function SpaceDesignerPage() {
   const saveFallbackPlan = useEffectEvent(() => {
     void saveSpacePlan(elements, measurementSettings).catch(() => undefined)
   })
+  const shouldMigrateLocalPlan = useEffectEvent((serverElements: PlanElement[]) => isStarterPlan(serverElements) && !isStarterPlan(elements))
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(elements))
@@ -184,6 +204,11 @@ export function SpaceDesignerPage() {
       .then((plan) => {
         const settings = parseMeasurementSettings(plan.measurementSettings)
         if (!isPlanElements(plan.elements) || !settings) {
+          saveFallbackPlan()
+          return
+        }
+        if (shouldMigrateLocalPlan(plan.elements)) {
+          // Preserve a customized local plan from before server persistence was added.
           saveFallbackPlan()
           return
         }

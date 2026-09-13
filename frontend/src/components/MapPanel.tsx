@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { getSpacePlan } from '../api'
 import type { CSSProperties } from 'react'
 import type { Location } from '../types'
 
@@ -33,6 +35,10 @@ function getPlan() {
   }
 }
 
+function isPlanElements(value: unknown): value is PlanElement[] {
+  return Array.isArray(value) && value.every((element) => typeof element === 'object' && element !== null && 'type' in element && ['wall', 'area', 'door', 'garageDoor', 'window'].includes(String(element.type)))
+}
+
 type MapPanelProps = {
   locations: Location[]
   selectedLocationId: string | null
@@ -42,7 +48,22 @@ type MapPanelProps = {
 }
 
 export function MapPanel({ locations, selectedLocationId, onSelectLocation, onAddLocation, onDesignSpace }: MapPanelProps) {
-  const plan = getPlan()
+  const [plan, setPlan] = useState<PlanElement[]>(getPlan)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    getSpacePlan(controller.signal)
+      .then((savedPlan) => {
+        if (!isPlanElements(savedPlan.elements)) return
+        setPlan(savedPlan.elements)
+      })
+      .catch((reason: unknown) => {
+        if (reason instanceof DOMException && reason.name === 'AbortError') return
+        // Local storage remains the preview fallback when the server is unavailable.
+      })
+    return () => controller.abort()
+  }, [])
+
   const locationsById = new Map(locations.map((location) => [location.id, location]))
   const mappedLocationIds = new Set(plan.flatMap((element) => element.type === 'area' && element.locationId ? [element.locationId] : []))
   let selectedLocation = selectedLocationId ? locationsById.get(selectedLocationId) : undefined
