@@ -126,6 +126,19 @@ describe('inventory navigation', () => {
     expect(container.querySelector('.preview-wall')?.getAttribute('x1')).toBe('20')
   })
 
+  it('provides a collapsed floor plan control for the mobile inventory layout', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.startsWith('/api/items')
+      ? Response.json(items)
+      : Response.json(locations)))
+    render(<App />)
+    await screen.findByText('Torque wrench')
+
+    const toggle = screen.getByRole('button', { name: 'Show floor plan' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Hide floor plan' }).getAttribute('aria-expanded')).toBe('true')
+  })
+
   it('opens the item management page as a subpage', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string) => url.startsWith('/api/items')
       ? Response.json(items)

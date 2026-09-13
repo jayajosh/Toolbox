@@ -59,6 +59,14 @@
   margin-top: 35px;
 }
 
+.inventory-map-panel {
+  min-width: 0;
+}
+
+.inventory-map-toggle {
+  display: none;
+}
+
 .inventory-search-row {
   display: flex;
   align-items: stretch;
@@ -331,8 +339,7 @@ body .empty-icon {
     padding-left: 14px;
   }
   .stats-note {
-    width: 100%;
-    margin-left: 0;
+    display: none;
   }
   .item-status {
     display: none;
@@ -342,6 +349,42 @@ body .empty-icon {
     align-items: stretch;
     flex-direction: column;
     gap: 14px;
+  }
+  .inventory-map-panel {
+    order: -1;
+  }
+  .inventory-map-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 52px;
+    padding: 0 17px;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--title-accent);
+    background: var(--surface-alt);
+    color: var(--title-accent);
+    font-weight: 800;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  .inventory-map-toggle-icon {
+    width: 10px;
+    height: 10px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg) translate(-2px, 2px);
+    transition: transform 150ms ease;
+  }
+  .inventory-map-panel.is-open .inventory-map-toggle-icon {
+    transform: rotate(225deg) translate(-2px, 2px);
+  }
+  .inventory-map-content {
+    display: none;
+    margin-top: 12px;
+  }
+  .inventory-map-panel.is-open .inventory-map-content {
+    display: block;
   }
   .modal-tag-list {
     grid-template-columns: 1fr;

@@ -64,6 +64,7 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
   const [features, setFeatures] = useState({ checkout: true, checkoutHistory: true })
   const loading = loadedSearch !== deferredSearch
   const [refreshVersion, setRefreshVersion] = useState(0)
+  const [floorPlanOpen, setFloorPlanOpen] = useState(false)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -369,13 +370,27 @@ export function InventoryPage({ onNavigate }: InventoryPageProps) {
             <ItemTable items={visibleItems} selectedItemIds={selectedItemIds} onToggleItem={toggleItem} onToggleAll={toggleVisibleItems} onNavigate={onNavigate} />
           )}
         </div>
-        <MapPanel
-           locations={locations}
-           selectedLocationId={selectedLocationId}
-           onSelectLocation={setSelectedLocationId}
-           onAddLocation={() => onNavigate('/locations')}
-           onDesignSpace={() => onNavigate('/designer')}
-         />
+        <div className={`inventory-map-panel${floorPlanOpen ? ' is-open' : ''}`}>
+          <button
+            className="inventory-map-toggle"
+            type="button"
+            aria-expanded={floorPlanOpen}
+            aria-controls="inventory-floor-plan"
+            onClick={() => setFloorPlanOpen((open) => !open)}
+          >
+            <span>{floorPlanOpen ? 'Hide floor plan' : 'Show floor plan'}</span>
+            <span className="inventory-map-toggle-icon" aria-hidden="true" />
+          </button>
+          <div className="inventory-map-content" id="inventory-floor-plan">
+            <MapPanel
+              locations={locations}
+              selectedLocationId={selectedLocationId}
+              onSelectLocation={setSelectedLocationId}
+              onAddLocation={() => onNavigate('/locations')}
+              onDesignSpace={() => onNavigate('/designer')}
+            />
+          </div>
+        </div>
       </section>
       {importOpen && <ImportToolsDialog
         families={familyOptions.map(({ family, path }) => ({ id: family.id, name: family.name, path }))}
