@@ -53,7 +53,7 @@ export function FamilyPicker({ families, value, onChange, onCreateFamily }: Fami
   }
 
   return (
-    <div className="field family-field">
+    <div className="field">
       <span>Family <small>Optional group</small></span>
       <div className={`family-picker${open ? ' family-picker--open' : ''}`}>
         <button className="family-value" type="button" onClick={() => setOpen((isOpen) => !isOpen)}>

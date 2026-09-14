@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
+COPY ["Directory.Build.props", "."]
 COPY ["src/Toolbox.Api/Toolbox.Api.csproj", "src/Toolbox.Api/"]
 COPY ["src/Toolbox.Application/Toolbox.Application.csproj", "src/Toolbox.Application/"]
 COPY ["src/Toolbox.Domain/Toolbox.Domain.csproj", "src/Toolbox.Domain/"]

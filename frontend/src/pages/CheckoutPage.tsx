@@ -25,6 +25,7 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
   const [borrower, setBorrower] = useState('')
   const [notes, setNotes] = useState('')
   const [dialogMode, setDialogMode] = useState<'checkout' | 'checkin' | null>(null)
+  const [mobileView, setMobileView] = useState<'in' | 'out'>('in')
   const dialog = useRef<HTMLDialogElement>(null)
 
   useEffect(() => {
@@ -136,7 +137,11 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
            <input id="checkout-search" type="search" placeholder="Search items, families, or tags..." value={search} disabled={busy} onChange={(event) => { setSearch(event.target.value); setSelectedIds(new Set()) }} />
           </section>
         {error && <p className="state-message state-message--error" role="alert">{error}</p>}
-        <div className="checkout-grid">
+        <div className="checkout-mobile-switch" role="group" aria-label="Checkout view">
+          <button className={mobileView === 'in' ? 'is-active' : ''} type="button" onClick={() => setMobileView('in')}>Currently in</button>
+          <button className={mobileView === 'out' ? 'is-active' : ''} type="button" onClick={() => setMobileView('out')}>Checked out</button>
+        </div>
+        <div className={`checkout-grid checkout-grid--${mobileView}`}>
           {[false, true].map((returning) => {
             const panelItems = returning ? checkedOut : available
             const count = panelItems.filter((item) => selectedIds.has(item.id)).length
@@ -147,7 +152,7 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
                   <div><h2>{title}</h2></div>
                   <span className="result-count">{panelItems.length} records</span>
                 </div>
-                <div className="bulk-toolbar">
+                <div className={`bulk-toolbar${count ? '' : ' bulk-toolbar--empty'}`}>
                   <span className="result-count">{count} selected</span>
                   <button type="button" disabled={!count || busy || search !== deferredSearch} onClick={() => {
                     setError(null)
@@ -164,7 +169,7 @@ export function CheckoutPage({ onNavigate }: { onNavigate: (path: string) => voi
         <dialog ref={dialog} className="bulk-modal checkout-dialog" aria-labelledby="checkout-dialog-title" onCancel={(event) => { if (busy) event.preventDefault() }}>
           <form onSubmit={(event) => { event.preventDefault(); void transfer(dialogMode === 'checkin') }}>
              <div className="bulk-modal-header"><div><p className="kicker">Item {dialogMode === 'checkin' ? 'check in' : 'checkout'}</p><h2 id="checkout-dialog-title">{dialogMode === 'checkin' ? 'Return selected items?' : selectedAvailable.length === 1 ? 'Who is taking it?' : 'Check out items'}</h2></div><button type="button" aria-label="Close transfer dialog" disabled={busy} onClick={() => { dialog.current?.close(); setDialogMode(null) }}>x</button></div>
-             <div className="bulk-modal-body checkout-fields">
+             <div className="bulk-modal-body">
               {dialogMode !== 'checkin' && <label className="field"><span>Borrower</span><input autoFocus required maxLength={200} value={borrower} disabled={busy} onChange={(event) => setBorrower(event.target.value)} placeholder="Who is taking these items?" /></label>}
               <label className="field"><span>Notes <small>Optional</small></span><textarea autoFocus={dialogMode === 'checkin'} rows={3} maxLength={2000} value={notes} disabled={busy} onChange={(event) => setNotes(event.target.value)} placeholder={dialogMode === 'checkin' ? 'Return condition or detail' : 'Project or return detail'} /></label>
               {error && <p className="bulk-error" role="alert">{error}</p>}

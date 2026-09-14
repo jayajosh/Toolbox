@@ -21,7 +21,6 @@ services:
       context: ./backend
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=${POSTGRES_DB:-toolbox};Username=${POSTGRES_USER:-toolbox};Password=${POSTGRES_PASSWORD:-toolbox_dev_only}
     ports:
       - "${API_PORT:-5080}:8080"

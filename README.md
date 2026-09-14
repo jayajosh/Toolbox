@@ -18,10 +18,9 @@ ASP.NET Core API, a React and TypeScript client, PostgreSQL persistence, and a
 reproducible Docker Compose deployment.
 
 > [!IMPORTANT]
-> Toolbox is currently in V1 pre-release testing. Its core inventory, storage,
-> checkout, and spatial-planning workflows are implemented and run through
-> Docker Compose. See [Project status](#project-status) for the remaining V1
-> release work and known limitations.
+> Toolbox V1 is feature complete. It includes inventory, storage, checkout,
+> and shared floor-planning workflows in a reproducible Docker Compose stack.
+> See [Known limitations](#known-limitations) for intentionally deferred scope.
 
 ## Why Toolbox?
 
@@ -29,7 +28,7 @@ Generic inventory tools can record what you own, but they rarely model where
 an object is stored with enough precision to help you find it. Toolbox treats
 storage as a core domain concept rather than a free-text field.
 
-- **Find items quickly:** search by name or description and see the complete
+- **Find items quickly:** search by name, family, or tag and see the complete
   storage path in each result.
 - **Add ranges quickly:** create numbered sets such as `mm 1/4" sockets 10`
   through `mm 1/4" sockets 24` in one operation.
@@ -104,7 +103,7 @@ for responsive search, browsing, and task-focused item and storage workflows.
 
 ### Repository layout
 
-The current foundation follows this structure:
+The repository follows this structure:
 
 ```text
 toolbox/
@@ -143,7 +142,6 @@ erDiagram
     ITEM {
         uuid id
         string name
-        string description
         uuid locationId
         boolean isConsumable
         string consumableStatus
@@ -163,8 +161,8 @@ erDiagram
   and items.
 - An **Item** belongs to one current storage container and exposes its calculated full
   storage path.
-- A **Checkout** is an append-only record. An item may have at most one active
-  checkout, while completed records remain available as history.
+- A **Checkout** is retained as history after it is closed. An item may have at
+  most one active checkout.
 
 ## API Design
 
@@ -182,14 +180,18 @@ explicit commands for checkout state transitions.
 | `GET` | `/api/items?search={query}` | Search and list items |
 | `POST` | `/api/items` | Create an item |
 | `POST` | `/api/items/quick-add` | Create a numbered range of items |
+| `POST` | `/api/items/import` | Import multiple items |
 | `GET` | `/api/items/{id}` | Retrieve an item and its history |
 | `PUT` | `/api/items/{id}` | Update or move an item |
 | `DELETE` | `/api/items/{id}` | Delete an item |
 | `POST` | `/api/items/{id}/checkout` | Check an item out |
 | `POST` | `/api/items/{id}/checkin` | Return an item |
+| `GET`, `POST` | `/api/families` | List or create item families |
+| `GET`, `POST` | `/api/tags` | List or create tags |
+| `GET`, `PUT` | `/api/space-plan` | Load or save the shared floor plan |
 
-Request and response schemas will be versioned and documented alongside the
-implemented API.
+The API uses JSON request and response bodies. Validation failures return a
+non-success HTTP status and an `error` field where a specific message is available.
 
 ## Project Status
 
@@ -209,8 +211,8 @@ a responsive React client. The core V1 workflows are implemented:
 
 The backend has migrations and automated domain coverage for hierarchy, search,
 movement, deletion, and checkout rules. The frontend covers the primary
-inventory, storage, and designer interactions. Before declaring V1 complete,
-the project still needs continuous integration and final release verification.
+inventory, storage, checkout, and designer interactions. Continuous integration
+runs the backend tests and the frontend lint, test, and production build checks.
 
 ### Floor plan
 
@@ -237,13 +239,14 @@ borrower and retained checkout history.
 - Floor plans only export as JSON when a portable copy is needed.
 - Dedicated storage-container detail URLs are deferred; V1 uses hierarchical
   Container filters on the Inventory and checkout pages instead.
-- Automated checks run locally, but a GitHub Actions CI workflow is not yet present.
 - Item photos and general attachments are not implemented.
 - QR storage-container labels are intentionally deferred to V2.
 - The checkout model records a borrower name rather than assigning a user account.
 
 The detailed implementation brief is available in
 [`docs/INITIAL_BUILD.md`](docs/INITIAL_BUILD.md).
+Release history is recorded in [`CHANGELOG.md`](CHANGELOG.md), and the release
+procedure is documented in [`docs/RELEASE.md`](docs/RELEASE.md).
 
 ## Running Toolbox
 
@@ -254,9 +257,10 @@ cp .env.example .env
 docker compose up --build
 ```
 
-The frontend is available at `http://192.168.10.116:7001/`, the API at
-`http://192.168.10.116:5080`, and PostgreSQL at `192.168.10.116:5432`. In Development,
-the API applies migrations and inserts demo data when the database is empty.
+By default, the frontend is available at `http://localhost:7001/`, the API at
+`http://localhost:5080`, and PostgreSQL at `localhost:5432`. Replace `localhost`
+with the Docker host's address to access Toolbox from another device on the same
+network. In Development, the API applies migrations at startup; seed data is disabled.
 The frontend includes inventory search, nested storage, item creation and bulk
 actions, quick-add ranges, tags, families, checkout/check-in, retained history,
 and the floor plan.
@@ -277,14 +281,34 @@ The backend exposes `GET /api/health/live`, `GET /api/health/ready`, and
 `GET /api/status`. See [`backend/README.md`](backend/README.md) for migration
 commands and connection-string configuration.
 
-Toolbox local Vite development uses `http://192.168.10.116:5174/` and preview
-uses port `4174`. Port `5173` is reserved for the separate portfolio
-application. These local ports can be changed in `frontend/.env` using
+Toolbox local Vite development uses `http://localhost:5174/` and preview uses
+port `4174`. These local ports can be changed in `frontend/.env` using
 `VITE_DEV_PORT` and `VITE_PREVIEW_PORT`.
 
 The Docker host ports can be changed in the root `.env` using `WEB_PORT`,
 `API_PORT`, and `POSTGRES_PORT`. The container-internal ports are fixed for
 service-to-service communication.
+
+### Upgrade and backup
+
+Back up PostgreSQL before upgrading:
+
+```bash
+docker compose exec -T db pg_dump -U toolbox -d toolbox > toolbox-backup.sql
+```
+
+Pull or check out the desired release, review any environment changes, then
+rebuild the stack:
+
+```bash
+docker compose up -d --build
+curl --fail http://localhost:7001/healthz
+curl --fail http://localhost:5080/api/health/ready
+```
+
+Development deployments apply pending EF Core migrations during API startup.
+Production deployments should apply migrations explicitly using the commands in
+[`backend/README.md`](backend/README.md) before starting the new API image.
 
 ## Engineering Priorities
 
@@ -307,7 +331,7 @@ service-to-service communication.
 | Inventory | Nested storage containers, item management, full paths, and search |
 | Circulation | Checkout and return commands with retained history |
 | Physical access | QR storage container labels and scan-led access in V2 |
-| Spatial view | Local floor plans and visual storage container placement |
+| Spatial view | Shared floor plans and visual storage container placement |
 | Extensions | Authentication, attachments, barcode support, and offline options |
 
 The map system is intentionally separated from the storage hierarchy. Its

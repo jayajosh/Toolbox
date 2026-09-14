@@ -155,7 +155,7 @@ public sealed class LocationService(ILocationRepository repository)
         await repository.SaveChangesAsync(cancellationToken);
     }
 
-    private static IReadOnlyList<Guid> GetDescendantIds(Guid locationId, IReadOnlyList<Location> locations)
+    private static List<Guid> GetDescendantIds(Guid locationId, IReadOnlyList<Location> locations)
     {
         var childrenByParent = locations
             .Where(location => location.ParentLocationId is not null)

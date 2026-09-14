@@ -5,9 +5,9 @@ The backend is a modular monolith targeting .NET 10 and PostgreSQL.
 ## Projects
 
 - `src/Toolbox.Domain`: guarded entities and domain invariants.
-- `src/Toolbox.Application`: application-layer boundary for future use cases.
+- `src/Toolbox.Application`: application services and repository contracts.
 - `src/Toolbox.Infrastructure`: EF Core persistence, migrations, health checks, and development initialization.
-- `src/Toolbox.Api`: ASP.NET Core host with foundation endpoints.
+- `src/Toolbox.Api`: ASP.NET Core host and REST endpoints.
 - `tests/Toolbox.Domain.Tests`: domain unit tests.
 
 ## Local commands
@@ -27,9 +27,9 @@ The API reads `ConnectionStrings:DefaultConnection`. Override it without editing
 ConnectionStrings__DefaultConnection='Host=localhost;Port=5432;Database=toolbox;Username=toolbox;Password=your-local-password' dotnet run --project src/Toolbox.Api
 ```
 
-In non-Production environments, startup applies migrations and inserts deterministic demo data only when all three domain tables are empty. Production does not run this initializer; apply migrations as part of deployment.
+In non-Production environments, startup applies migrations automatically. Seed data is disabled. Production does not run the initializer; apply migrations as part of deployment.
 
-## Foundation endpoints
+## Operational endpoints
 
 - `GET /api/health/live`: process liveness, no database dependency.
 - `GET /api/health/ready`: database readiness, `200 Healthy` or `503 Unhealthy`.
@@ -58,4 +58,4 @@ docker run --rm -p 8080:8080 \
   toolbox-api
 ```
 
-The image listens on port `8080`. Compose deployments should provide `ConnectionStrings__DefaultConnection` and use the non-Production environment if they want automatic migration and demo seeding.
+The image listens on port `8080`. Compose deployments should provide `ConnectionStrings__DefaultConnection` and use a non-Production environment if they want automatic migrations.

@@ -41,6 +41,9 @@
   background: #65856b;
   box-shadow: 0 0 0 4px #65856b1c;
 }
+.designer-page .mobile-new-plan {
+  display: none;
+}
 
 .designer-shell {
   display: grid;
@@ -468,6 +471,9 @@
   border-left: 1px solid var(--border);
   background: var(--surface);
 }
+.mobile-properties-title {
+  display: none;
+}
 .location-library {
   overflow: hidden;
   border-bottom: 1px solid var(--border);
@@ -869,47 +875,206 @@
   .designer-page {
     padding: var(--page-heading-gap) 20px 24px;
   }
+  .designer-page > .page-heading {
+    align-items: center;
+    flex-direction: row;
+  }
+  .designer-page .page-heading-actions {
+    width: auto;
+    margin-left: auto;
+  }
   .designer-shell {
     display: flex;
-    height: auto;
-    min-height: 650px;
-    flex: none;
+    height: 0;
+    min-height: 0;
+    flex: 1 1 0;
     flex-direction: column;
-    box-shadow: 4px 5px 0 var(--border);
+    gap: 16px;
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
   }
   .sidebar-resize-handle {
     display: none;
   }
   .designer-workspace {
-    flex: 1;
+    min-height: 0;
+    flex: 1 1 0;
+    border: 1px solid var(--border);
+    box-shadow: 4px 5px 0 var(--border);
   }
-  .save-status {
-    width: 100%;
-    margin-bottom: 3px;
+  .designer-page .save-status {
+    width: auto;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .designer-page .mobile-new-plan {
+    display: inline-flex;
+    padding: 0 9px;
+    white-space: nowrap;
   }
   .designer-tools {
+    align-items: center;
+    flex: 0 0 auto;
     flex-direction: row;
+    gap: 8px;
     padding: 8px;
     overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
+    border: 1px solid var(--border);
+    box-shadow: 4px 5px 0 var(--border);
+  }
+  .designer-inspector {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: stretch;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    box-shadow: 4px 5px 0 var(--border);
+  }
+  .mobile-properties-title {
+    display: flex;
+    flex: 0 0 112px;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--title-accent);
+    font-weight: 800;
+    text-transform: uppercase;
+  }
+  .designer-inspector > .inspector-empty {
+    display: flex;
+    min-width: max-content;
+    flex-direction: row;
+    gap: 8px;
+    padding: 0;
+    text-align: left;
+  }
+  .designer-inspector > .inspector-content {
+    display: flex;
+    min-width: max-content;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+  }
+  .inspector-empty-icon,
+  .inspector-empty > p {
+    display: none;
+  }
+  .inspector-empty > strong {
+    display: flex;
+    min-width: 145px;
+    min-height: 46px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    white-space: nowrap;
+  }
+  .inspector-empty-actions {
+    display: contents;
+  }
+  .inspector-empty-actions > .secondary-button,
+  .inspector-plan-actions {
+    display: none;
+  }
+  .inspector-empty-actions .primary-button,
+  .inspector-empty-actions .secondary-button {
+    flex: 0 0 112px;
+    width: 112px;
+    min-width: 112px;
+    min-height: 46px;
+    height: 46px;
+    padding: 0 8px;
+    white-space: normal;
+  }
+  .inspector-empty .canvas-controls {
+    width: auto;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0 0 0 8px;
+    border-top: 0;
+    border-left: 1px solid var(--border);
+  }
+  .inspector-empty .canvas-controls .snap-toggle {
+    margin-right: 0;
+  }
+  .inspector-empty .canvas-controls label {
+    min-width: auto;
+  }
+  .selection-type {
+    min-width: 155px;
+    margin: 0;
+    padding: 0 12px 0 0;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+  }
+  .inspector-content .inspector-field {
+    flex: 0 0 132px;
+    margin: 0;
+  }
+  .inspector-content .inspector-field-row {
+    gap: 8px;
+  }
+  .inspector-content .measurement-card {
+    min-width: 112px;
+    margin: 0;
+  }
+  .inspector-content .container-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .inspector-content .edit-element,
+  .inspector-content .remove-element,
+  .inspector-content .delete-element {
+    width: auto;
+    min-width: 145px;
+    min-height: 54px;
+    margin: 0;
+  }
+  .inspector-content > .delete-element {
+    margin: 0;
   }
   .tool-section-label,
   .tool-divider,
-  .designer-tool kbd,
-  .designer-tool--compact span {
+  .tool-context,
+  .designer-tool kbd {
     display: none;
   }
   .designer-tool {
     display: flex;
-    min-width: 76px;
-    width: auto;
+    flex: 0 0 112px;
+    width: 112px;
+    min-width: 112px;
+    min-height: 46px;
+    height: 46px;
     justify-content: center;
-    gap: 6px;
     padding: 0 8px;
+    line-height: 1.1;
+    text-align: center;
+    white-space: normal;
+  }
+  .designer-tool svg {
+    display: none;
+  }
+  .designer-tool > span {
+    max-width: 90px;
+  }
+  .designer-tool.is-active {
+    box-shadow: none;
   }
   .designer-tool--compact {
-    min-width: 39px;
+    flex-basis: 112px;
+    width: 112px;
+    min-width: 112px;
   }
   .tool-context {
     min-width: 180px;
@@ -921,7 +1086,6 @@
   .designer-tools:not(.is-library) button[title="Undo"],
   .designer-tools:not(.is-library) button[title="Redo"] {
     position: static;
-    width: auto;
   }
   .canvas-controls {
     width: 100%;
@@ -935,7 +1099,7 @@
     display: none;
   }
   .plan-viewport {
-    min-height: 485px;
+    min-height: 0;
     padding: 18px;
   }
   .canvas-statusbar {

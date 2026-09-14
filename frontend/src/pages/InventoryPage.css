@@ -98,14 +98,6 @@
   border-top: 3px solid var(--title-accent);
 }
 
-.inventory-card > .card-topline .kicker,
-.map-card > .card-topline .kicker {
-  display: inline-block;
-  margin-bottom: 11px;
-  padding: 3px 7px 2px;
-  background: var(--title-accent);
-  color: var(--accent-foreground);
-}
 .inventory-card > .card-topline h2,
 .circulation-card-topline h2,
 .map-card > .card-topline h2 {
@@ -344,7 +336,7 @@ body .empty-icon {
   .item-status {
     display: none;
   }
-  .inventory-card-heading {
+  .inventory-card > .inventory-card-heading {
     display: flex;
     align-items: stretch;
     flex-direction: column;

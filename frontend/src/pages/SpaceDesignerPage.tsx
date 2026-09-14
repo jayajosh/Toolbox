@@ -27,6 +27,8 @@ type MeasurementSettings = { unit: MeasurementUnit; perGrid: number; gridSize: n
 const DEFAULT_GRID_SIZE = 20
 const DEFAULT_MAX_WIDTH = 60
 const DEFAULT_MAX_HEIGHT = 38
+const MIN_ZOOM = 0.1
+const MAX_ZOOM = 1.5
 const STORAGE_KEY = 'toolbox-space-plan-v1'
 const SETTINGS_STORAGE_KEY = 'toolbox-space-plan-settings-v1'
 let localIdSequence = 0
@@ -167,9 +169,14 @@ export function SpaceDesignerPage() {
   const [deletingLocation, setDeletingLocation] = useState(false)
   const [planReady, setPlanReady] = useState(false)
   const skipPlanSave = useRef(true)
+  const viewportRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const storageLabelRef = useRef<HTMLInputElement>(null)
   const planFileInputRef = useRef<HTMLInputElement>(null)
+  const touchPointers = useRef(new Map<number, Point>())
+  const pinchInteraction = useRef<{ distance: number; zoom: number; anchor: Point } | null>(null)
+  const panInteraction = useRef<{ pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null)
+  const hasFittedView = useRef(false)
 
   const selected = elements.find((element) => element.id === selectedId) ?? null
   const canvasWidth = Math.max(measurementSettings.gridSize, Math.round(measurementSettings.maxWidth / measurementSettings.perGrid) * measurementSettings.gridSize)
@@ -224,6 +231,21 @@ export function SpaceDesignerPage() {
       .finally(() => setPlanReady(true))
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    if (!planReady || hasFittedView.current) return
+    const frame = window.requestAnimationFrame(() => {
+      const viewport = viewportRef.current
+      if (!viewport) return
+      const styles = window.getComputedStyle(viewport)
+      const availableWidth = viewport.clientWidth - parseFloat(styles.paddingLeft) - parseFloat(styles.paddingRight)
+      const availableHeight = viewport.clientHeight - parseFloat(styles.paddingTop) - parseFloat(styles.paddingBottom)
+      if (availableWidth <= 0 || availableHeight <= 0) return
+      setZoom(Math.max(MIN_ZOOM, Math.min(1, availableWidth / canvasWidth, availableHeight / canvasHeight)))
+      hasFittedView.current = true
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [canvasHeight, canvasWidth, planReady])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -287,6 +309,61 @@ export function SpaceDesignerPage() {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
 
+  function trackViewportPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== 'touch') return
+    touchPointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    if (touchPointers.current.size !== 2) return
+    const [first, second] = [...touchPointers.current.values()]
+    const viewport = viewportRef.current
+    if (!first || !second || !viewport) return
+    const rect = viewport.getBoundingClientRect()
+    const midpoint = { x: (first.x + second.x) / 2 - rect.left, y: (first.y + second.y) / 2 - rect.top }
+    const styles = window.getComputedStyle(viewport)
+    const paddingLeft = parseFloat(styles.paddingLeft)
+    const paddingTop = parseFloat(styles.paddingTop)
+    pinchInteraction.current = {
+      distance: Math.hypot(second.x - first.x, second.y - first.y),
+      zoom,
+      anchor: {
+        x: (viewport.scrollLeft + midpoint.x - paddingLeft) / zoom,
+        y: (viewport.scrollTop + midpoint.y - paddingTop) / zoom,
+      },
+    }
+    panInteraction.current = null
+    if (interaction) {
+      setElements(interaction.before)
+      setSelectedId(interaction.mode === 'draw' ? null : interaction.id)
+      setInteraction(null)
+    }
+  }
+
+  function trackViewportPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!touchPointers.current.has(event.pointerId)) return
+    touchPointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    const pinch = pinchInteraction.current
+    if (!pinch || touchPointers.current.size < 2) return
+    event.preventDefault()
+    const [first, second] = [...touchPointers.current.values()]
+    const viewport = viewportRef.current
+    if (!first || !second || !viewport || pinch.distance === 0) return
+    const nextZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, pinch.zoom * Math.hypot(second.x - first.x, second.y - first.y) / pinch.distance))
+    const rect = viewport.getBoundingClientRect()
+    const midpoint = { x: (first.x + second.x) / 2 - rect.left, y: (first.y + second.y) / 2 - rect.top }
+    const styles = window.getComputedStyle(viewport)
+    const paddingLeft = parseFloat(styles.paddingLeft)
+    const paddingTop = parseFloat(styles.paddingTop)
+    setZoom(nextZoom)
+    window.requestAnimationFrame(() => {
+      viewport.scrollLeft = pinch.anchor.x * nextZoom + paddingLeft - midpoint.x
+      viewport.scrollTop = pinch.anchor.y * nextZoom + paddingTop - midpoint.y
+    })
+  }
+
+  function trackViewportPointerEnd(event: ReactPointerEvent<HTMLDivElement>) {
+    touchPointers.current.delete(event.pointerId)
+    if (touchPointers.current.size < 2) pinchInteraction.current = null
+  }
+
   function saveChange(next: PlanElement[]) {
     setUndoStack((stack) => [...stack.slice(-39), cloneElements(elements)])
     setRedoStack([])
@@ -317,8 +394,20 @@ export function SpaceDesignerPage() {
 
   function startDrawing(event: ReactPointerEvent<SVGSVGElement>) {
     if (event.button !== 0) return
+    if (event.pointerType === 'touch' && touchPointers.current.size > 1) return
     if (tool === 'select') {
       setSelectedId(null)
+      const viewport = viewportRef.current
+      if (event.pointerType === 'touch' && viewport) {
+        svgRef.current?.setPointerCapture?.(event.pointerId)
+        panInteraction.current = {
+          pointerId: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          scrollLeft: viewport.scrollLeft,
+          scrollTop: viewport.scrollTop,
+        }
+      }
       return
     }
     const point = pointFromEvent(event)
@@ -334,6 +423,7 @@ export function SpaceDesignerPage() {
 
   function startEditing(event: ReactPointerEvent<SVGElement>, element: PlanElement, mode: 'move' | 'resize' = 'move', handle?: string) {
     if (tool !== 'select' || event.button !== 0) return
+    if (event.pointerType === 'touch' && touchPointers.current.size > 1) return
     event.stopPropagation()
     const point = pointFromEvent(event)
     svgRef.current?.setPointerCapture?.(event.pointerId)
@@ -342,6 +432,16 @@ export function SpaceDesignerPage() {
   }
 
   function movePointer(event: ReactPointerEvent<SVGSVGElement>) {
+    const pan = panInteraction.current
+    if (pan?.pointerId === event.pointerId) {
+      const viewport = viewportRef.current
+      if (viewport) {
+        event.preventDefault()
+        viewport.scrollLeft = pan.scrollLeft + pan.x - event.clientX
+        viewport.scrollTop = pan.scrollTop + pan.y - event.clientY
+      }
+      return
+    }
     if (!interaction) return
     const point = pointFromEvent(event)
     const delta = { x: point.x - interaction.start.x, y: point.y - interaction.start.y }
@@ -375,6 +475,11 @@ export function SpaceDesignerPage() {
   }
 
   function endPointer(event: ReactPointerEvent<SVGSVGElement>) {
+    if (panInteraction.current?.pointerId === event.pointerId) {
+      panInteraction.current = null
+      if (svgRef.current?.hasPointerCapture?.(event.pointerId)) svgRef.current.releasePointerCapture(event.pointerId)
+      return
+    }
     if (!interaction) return
     svgRef.current?.releasePointerCapture?.(event.pointerId)
     let valid = true
@@ -601,17 +706,17 @@ export function SpaceDesignerPage() {
       <label className="measurement-select"><span>Units</span><select aria-label="Measurement unit" value={measurementSettings.unit} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, unit: event.target.value as MeasurementUnit }))}><option value="ft">Feet</option><option value="in">Inches</option><option value="m">Metres</option><option value="cm">Centimetres</option><option value="mm">Millimetres</option></select></label>
       <label className="toolbar-scale"><span>Per square</span><input aria-label="Scale per grid square" type="number" min="0.01" step="0.1" value={measurementSettings.perGrid} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, perGrid: Math.max(.01, Number(event.target.value)) }))} /></label>
       <label className="toolbar-design-size"><span>Max</span><input aria-label="Maximum design width" type="number" min="1" step="0.5" value={measurementSettings.maxWidth} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, maxWidth: Math.max(1, Number(event.target.value)) }))} /><span>&times;</span><input aria-label="Maximum design height" type="number" min="1" step="0.5" value={measurementSettings.maxHeight} onChange={(event) => setMeasurementSettings((settings) => ({ ...settings, maxHeight: Math.max(1, Number(event.target.value)) }))} /><small>{measurementSettings.unit}</small></label>
-      <button type="button" onClick={() => setZoom((value) => Math.max(.5, value - .1))} aria-label="Zoom out">&minus;</button>
+      <button type="button" onClick={() => setZoom((value) => Math.max(MIN_ZOOM, value - .1))} aria-label="Zoom out">&minus;</button>
       <span className="zoom-value">{Math.round(zoom * 100)}%</span>
-      <button type="button" onClick={() => setZoom((value) => Math.min(1.5, value + .1))} aria-label="Zoom in">+</button>
+      <button type="button" onClick={() => setZoom((value) => Math.min(MAX_ZOOM, value + .1))} aria-label="Zoom in">+</button>
     </div>
   }
 
   return (
     <main className="designer-page">
-      <PageHeading kicker="Floor plan" actions={<span className="save-status"><span /> Saved</span>} />
+      <PageHeading kicker="Floor plan" actions={<><span className="save-status"><span /> Saved</span><button className="secondary-button mobile-new-plan" type="button" onClick={clearPlan}>New plan</button></>} />
 
-       <section className={libraryOpen ? 'designer-shell is-library-open' : 'designer-shell'} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} aria-label="Floor plan">
+       <section className="designer-shell" style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties} aria-label="Floor plan">
          <aside id="designer-sidebar" className={libraryOpen ? 'designer-tools is-library' : 'designer-tools'} aria-label={libraryOpen ? 'Storage library' : 'Drawing tools'}>
            {!libraryOpen ? <>
               <span className="tool-section-label">Tools</span>
@@ -670,7 +775,16 @@ export function SpaceDesignerPage() {
         />
 
          <div className="designer-workspace">
-           <div className={`plan-viewport tool-${tool}`} onDragOver={(event) => event.preventDefault()} onDrop={dropLocation}>
+           <div
+             ref={viewportRef}
+             className={`plan-viewport tool-${tool}`}
+             onDragOver={(event) => event.preventDefault()}
+             onDrop={dropLocation}
+             onPointerDownCapture={trackViewportPointerDown}
+             onPointerMoveCapture={trackViewportPointerMove}
+             onPointerUpCapture={trackViewportPointerEnd}
+             onPointerCancelCapture={trackViewportPointerEnd}
+           >
             <svg
               ref={svgRef}
               className="plan-canvas"
@@ -695,6 +809,7 @@ export function SpaceDesignerPage() {
         </div>
 
           <aside className="designer-inspector" aria-label="Properties">
+             <span className="mobile-properties-title">Properties</span>
              {!selected && <div className="inspector-empty">
                 <span className="inspector-empty-icon">+</span><strong>Nothing selected</strong><p>Select an object on the plan to adjust its size and position.</p>
                 <div className="inspector-empty-actions">

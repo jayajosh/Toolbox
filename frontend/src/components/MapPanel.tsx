@@ -101,7 +101,7 @@ export function MapPanel({ locations, selectedLocationId, onSelectLocation, onAd
           })}
         </svg>
       </div>
-        <div className="map-footer"><div><span className="map-key map-key--active" /> {selectedLocation ? `Selected: ${selectedLocation.name}` : 'Saved floor plan'}</div>{onDesignSpace && <button className="text-button" type="button" onClick={onDesignSpace}>Open floor plan &rarr;</button>}</div>
+        <div className="map-footer"><div><span className="map-key" /> {selectedLocation ? `Selected: ${selectedLocation.name}` : 'Saved floor plan'}</div>{onDesignSpace && <button className="text-button" type="button" onClick={onDesignSpace}>Open floor plan &rarr;</button>}</div>
     </section>
   )
 }

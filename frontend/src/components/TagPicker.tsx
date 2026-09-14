@@ -82,9 +82,9 @@ export function TagPicker({ tags, selectedTagIds, onChange, onCreateTag, onDelet
   }
 
   return (
-    <div className="field tag-field">
+    <div className="field">
       <span>Tags <small>Optional, choose any number</small></span>
-      <div ref={pickerRef} className={`tag-picker${open ? ' tag-picker--open' : ''}`}>
+      <div ref={pickerRef} className="tag-picker">
         <div className="tag-chips">
           {selected.map((tag) => (
             <button className="tag-chip" key={tag.id} type="button" onClick={() => toggle(tag)}>

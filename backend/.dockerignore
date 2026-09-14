@@ -5,3 +5,5 @@
 *.user
 *.suo
 README.md
+tests/
+Toolbox.sln

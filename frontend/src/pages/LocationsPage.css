@@ -263,6 +263,13 @@
 }
 
 @media (max-width: 680px) {
+  .color-picker-menu {
+    right: 0;
+    left: auto;
+    min-width: 0;
+    width: min(224px, calc(100vw - 56px));
+  }
+
   .location-page .location-list {
     height: auto;
     max-height: 560px;

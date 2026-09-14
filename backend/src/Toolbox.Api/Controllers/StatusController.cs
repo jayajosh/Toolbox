@@ -10,7 +10,7 @@ public sealed class StatusController : ControllerBase
     public IActionResult Get() => Ok(new
     {
         name = "Toolbox",
-        version = "0.1.0",
-        stage = "foundation"
+        version = "1.0.0",
+        stage = "stable"
     });
 }

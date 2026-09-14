@@ -1,7 +1,7 @@
 import type { FamilySummary, ImportedItem, ImportItemInput, Item, ItemDetails, ItemInput, Location, LocationInput, QuickAddInput, Tag } from './types'
 
-export type ItemFeatures = { checkout: boolean; checkoutHistory: boolean }
-export type SpacePlan = { elements: unknown; measurementSettings: unknown; updatedAt: string }
+type ItemFeatures = { checkout: boolean; checkoutHistory: boolean }
+type SpacePlan = { elements: unknown; measurementSettings: unknown; updatedAt: string }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {

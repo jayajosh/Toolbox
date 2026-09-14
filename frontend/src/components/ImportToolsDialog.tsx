@@ -122,7 +122,7 @@ export function ImportToolsDialog({ families, unorganisedLocationId, onClose, on
           <span>CSV file</span>
           <input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) parseFile(file) }} />
         </label>
-        {filename && <p className="import-file-name">{filename}</p>}
+        {filename && <p>{filename}</p>}
         {tools.length > 0 && !errors.length && <div className="import-summary" role="status">
           <strong>{tools.length} tool{tools.length === 1 ? '' : 's'} ready</strong>
           <span>Destination: Unorganised</span>

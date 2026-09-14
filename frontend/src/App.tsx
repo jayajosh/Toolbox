@@ -8,7 +8,7 @@ import { SpaceDesignerPage } from './pages/SpaceDesignerPage'
 
 type Route = { page: 'inventory' | 'item' | 'locations' | 'designer' | 'checkout'; id?: string }
 type Theme = 'light' | 'dark'
-export type InventoryAction = 'import' | 'export'
+type InventoryAction = 'import' | 'export'
 const THEME_KEY = 'toolbox-theme'
 
 function initialTheme(): Theme {
@@ -25,13 +25,21 @@ function routeFromLocation(): Route {
 }
 
 function ThemeSwitch({ theme, className, onToggle }: { theme: Theme; className: string; onToggle: () => void }) {
-  return <button className={`theme-switch ${className}`} type="button" onClick={onToggle} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}><span className="theme-switch-label">{theme === 'light' ? 'Light' : 'Dark'}</span><span className="theme-switch-track"><span className="theme-switch-thumb" /></span></button>
+  return <button className={`theme-switch ${className}`} type="button" onClick={onToggle} aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
+    <span className="theme-switch-label">{theme === 'light' ? 'Light' : 'Dark'}</span>
+    <svg className="theme-switch-icon" viewBox="0 0 24 24" aria-hidden="true">
+      {theme === 'light'
+        ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" /></>
+        : <path d="M20 15.2A8.5 8.5 0 0 1 8.8 4a8.5 8.5 0 1 0 11.2 11.2Z" />}
+    </svg>
+    <span className="theme-switch-track"><span className="theme-switch-thumb" /></span>
+  </button>
 }
 
 function HeaderTools({ theme, onInventoryAction, onToggleTheme }: { theme: Theme; onInventoryAction: (action: InventoryAction) => void; onToggleTheme: () => void }) {
   return <div className="header-tools">
-    <button className="header-tool-action" type="button" onClick={() => onInventoryAction('import')}>Import tools</button>
-    <button className="header-tool-action" type="button" onClick={() => onInventoryAction('export')}>Export tools</button>
+    <button className="header-tool-action" type="button" onClick={() => onInventoryAction('import')}>Import{' '}<span className="header-tool-suffix">tools</span></button>
+    <button className="header-tool-action" type="button" onClick={() => onInventoryAction('export')}>Export{' '}<span className="header-tool-suffix">tools</span></button>
     <ThemeSwitch theme={theme} className="theme-switch--desktop" onToggle={onToggleTheme} />
   </div>
 }
@@ -70,7 +78,7 @@ export default function App() {
   }
 
   return (
-    <div className={route.page === 'designer' ? 'app-shell is-floor-plan' : 'app-shell'} data-theme={theme}>
+    <div className={route.page === 'designer' ? 'app-shell is-floor-plan' : 'app-shell'}>
       <header className="app-header">
         <Brand onNavigate={navigate} />
         <nav className="main-nav" aria-label="Main navigation">
@@ -86,7 +94,7 @@ export default function App() {
       {route.page === 'item' && <ItemPage id={route.id} onNavigate={navigate} />}
       {route.page === 'locations' && <LocationsPage onNavigate={navigate} />}
        {route.page === 'designer' && <SpaceDesignerPage />}
-      <footer className="app-footer"><span>Toolbox / A clearer place for everything.</span><span>Foundation build</span></footer>
+       <footer className="app-footer"><span>Toolbox / A clearer place for everything.</span><span>V1</span></footer>
     </div>
   )
 }

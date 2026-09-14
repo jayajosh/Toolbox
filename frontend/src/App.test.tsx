@@ -396,6 +396,39 @@ describe('inventory navigation', () => {
     expect(within(context).getByText('Click and drag on the grid to draw')).toBeTruthy()
   })
 
+  it('zooms the floor plan with a two-finger gesture', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(locations)))
+    window.history.pushState({}, '', '/designer')
+    render(<App />)
+
+    const canvas = screen.getByLabelText('Floor plan drawing canvas')
+    const viewport = canvas.parentElement!
+    vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({ x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 500, width: 400, height: 500, toJSON: () => ({}) })
+
+    fireEvent.pointerDown(viewport, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    fireEvent.pointerDown(viewport, { pointerId: 2, pointerType: 'touch', clientX: 200, clientY: 100 })
+    fireEvent.pointerMove(viewport, { pointerId: 2, pointerType: 'touch', clientX: 250, clientY: 100 })
+
+    expect(screen.getByText('120%')).toBeTruthy()
+  })
+
+  it('pans the floor plan with one finger while using the select tool', () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(locations)))
+    window.history.pushState({}, '', '/designer')
+    render(<App />)
+
+    const canvas = screen.getByLabelText('Floor plan drawing canvas')
+    const viewport = canvas.parentElement!
+    viewport.scrollLeft = 80
+    viewport.scrollTop = 60
+
+    fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, pointerType: 'touch', clientX: 120, clientY: 140 })
+    fireEvent.pointerMove(canvas, { pointerId: 1, pointerType: 'touch', clientX: 90, clientY: 100 })
+
+    expect(viewport.scrollLeft).toBe(110)
+    expect(viewport.scrollTop).toBe(100)
+  })
+
   it('resizes the shared tools/library sidebar with keyboard and captured pointers', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Response.json(locations)))
     window.history.pushState({}, '', '/designer')
